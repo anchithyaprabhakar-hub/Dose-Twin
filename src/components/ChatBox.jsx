@@ -1,32 +1,32 @@
 import { useState } from "react";
+import { askGemini } from "../gemini";
 import Message from "./Message";
 import ChatInput from "./ChatInput";
 
 function ChatBox() {
   const [messages, setMessages] = useState([
     {
-      sender: "bot",
-      text: "Hello! I'm your AI Health Assistant. How can I help you today?"
-    }
+      sender: "ai",
+      text: "Hello! I'm your AI Health Assistant. How can I help you today?",
+    },
   ]);
 
-  function handleSend(text) {
-    const userMessage = {
-      sender: "user",
-      text
-    };
+  const sendMessage = async (text) => {
+    if (!text.trim()) return;
 
-    const botReply = {
-      sender: "bot",
-      text: "This is a demo response. AI integration will come next."
-    };
+    setMessages((prev) => [...prev, { sender: "user", text }]);
 
-    setMessages((prev) => [...prev, userMessage, botReply]);
-  }
+    const reply = await askGemini(text);
+
+    setMessages((prev) => [
+      ...prev,
+      { sender: "ai", text: reply },
+    ]);
+  };
 
   return (
-    <div className="max-w-4xl mx-auto bg-slate-900 rounded-xl p-6">
-      <div className="h-[500px] overflow-y-auto mb-6">
+    <div className="bg-slate-900 rounded-2xl p-6 h-[650px] flex flex-col">
+      <div className="flex-1 overflow-y-auto space-y-4 mb-6">
         {messages.map((message, index) => (
           <Message
             key={index}
@@ -36,7 +36,7 @@ function ChatBox() {
         ))}
       </div>
 
-      <ChatInput onSend={handleSend} />
+      <ChatInput onSend={sendMessage} />
     </div>
   );
 }
