@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase";
 import {
   signInWithEmailAndPassword,
@@ -8,22 +9,27 @@ import {
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
   const login = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       alert("Login Successful");
+      navigate("/dashboard");
     } catch (err) {
-      alert(err.message);
+      console.error(err);
+      alert(err.code + "\n" + err.message);
     }
   };
 
   const signup = async () => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
       alert("Account Created");
+      navigate("/dashboard");
     } catch (err) {
-      alert(err.message);
+      console.error(err);
+      alert(err.code + "\n" + err.message);
     }
   };
 
@@ -35,6 +41,7 @@ function Login() {
         className="p-3 rounded text-black w-80"
         type="email"
         placeholder="Email"
+        value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
 
@@ -42,6 +49,7 @@ function Login() {
         className="p-3 rounded text-black w-80"
         type="password"
         placeholder="Password"
+        value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
 
