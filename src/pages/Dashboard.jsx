@@ -12,7 +12,13 @@ import {
 
 function Dashboard() {
   const hour = new Date().getHours();
+  const today = new Date();
 
+const formattedDate = today.toLocaleDateString("en-US", {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
   let greeting;
 
   if (hour >= 5 && hour < 12) {
@@ -215,7 +221,7 @@ function Dashboard() {
                 </h3>
 
                 <p className="text-sm text-slate-500 mt-1">
-                  Sunday, August 9
+                  {formattedDate}
                 </p>
               </div>
 
