@@ -15,6 +15,8 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 
+import medicine from "../assets/medicine.svg";
+
 function Login() {
   const navigate = useNavigate();
 
@@ -59,7 +61,7 @@ const signup = async () => {
     {/* LEFT PANEL */}
     <div className="w-full lg:w-1/2 flex items-center justify-center px-8 lg:px-20">
 
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 p-8">
 
         <Link
           to="/"
@@ -97,7 +99,7 @@ const signup = async () => {
           <Mail className="text-slate-500" size={18} />
 
           <input
-            className="bg-transparent outline-none w-full p-4 text-white"
+            className="bg-transparent outline-none w-full p-4 text-white focus:ring-2 focus:ring-cyan-400/40 focus:border-cyan-400 transition-all duration-300"
             placeholder="you@example.com"
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
@@ -150,7 +152,7 @@ const signup = async () => {
         <button
           onClick={isSignup ? signup : login}
           disabled={loading}
-          className="w-full mt-8 bg-gradient-to-r from-cyan-400 to-teal-400 py-4 rounded-full font-semibold text-xl hover:scale-[1.02] transition"
+          className="w-full mt-8 bg-gradient-to-r from-cyan-400 to-teal-400 py-4 rounded-full font-semibold text-xl hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(34,211,238,0.35)] transition-all duration-300"
         >
 
           {loading
@@ -182,30 +184,40 @@ const signup = async () => {
 
     </div>
 
-    {/* RIGHT PANEL */}
+   {/* RIGHT PANEL */}
 
-    <div className="hidden lg:flex w-1/2 relative overflow-hidden bg-[#0A1724]">
+<div className="hidden lg:flex w-1/2 relative overflow-hidden bg-[#0A1724] flex-col items-center justify-center">
 
-      <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#2c3e50_1px,transparent_1px),linear-gradient(90deg,#2c3e50_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+  {/* Background Grid */}
+  <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#2c3e50_1px,transparent_1px),linear-gradient(90deg,#2c3e50_1px,transparent_1px)] bg-[size:40px_40px]"></div>
 
-      <div className="flex flex-col justify-center items-center w-full">
+  {/* Illustration */}
+  <div className="relative z-10 flex justify-center items-center">
 
-        <div className="w-44 h-44 rounded-full bg-gradient-to-r from-cyan-400 to-red-400 shadow-[0_0_80px_rgba(34,211,238,0.4)]"></div>
+    <div className="absolute inset-0 bg-cyan-400 blur-[120px] opacity-20 rounded-full"></div>
 
-        <h2 className="text-white text-4xl font-semibold text-center max-w-xl mt-16 leading-relaxed px-10">
-          "The first time I trusted an app to tell me if Dad took his meds."
-        </h2>
-
-        <p className="tracking-[5px] text-slate-500 mt-8 uppercase">
-          Family Caregiver
-        </p>
-
-      </div>
-
-    </div>
+    <img
+      src={medicine}
+      alt="Medicine Illustration"
+      className="relative w-[420px] max-w-[80%] animate-float"
+    />
 
   </div>
+
+  {/* Quote */}
+  <h2 className="relative z-10 text-white text-4xl font-semibold text-center max-w-xl mt-12 leading-relaxed px-10">
+    "Your AI-powered medication companion."
+  </h2>
+
+  {/* Tagline */}
+  <p className="relative z-10 tracking-[5px] text-slate-500 mt-8 uppercase text-center">
+    AI • Digital Twin • Smart Healthcare
+  </p>
+
+</div>
+</div>
 );
+
 }
 
 export default Login;
