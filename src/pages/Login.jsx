@@ -28,6 +28,11 @@ const [loading, setLoading] = useState(false);
 const [isSignup, setIsSignup] = useState(false); 
 
   const login = async () => {
+  if (!email || !password) {
+    alert("Please enter your email and password.");
+    return;
+  }
+
   try {
     setLoading(true);
 
@@ -41,7 +46,19 @@ const [isSignup, setIsSignup] = useState(false);
   }
 };
 
+
+
 const signup = async () => {
+  if (!email || !password) {
+    alert("Please enter your email and password.");
+    return;
+  }
+
+  if (password.length < 6) {
+    alert("Password must be at least 6 characters.");
+    return;
+  }
+
   try {
     setLoading(true);
 
