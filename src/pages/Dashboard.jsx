@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Bell,
   CalendarDays,
@@ -11,6 +12,23 @@ import {
 } from "lucide-react";
 
 function Dashboard() {
+  const [taken, setTaken] = useState({
+  metformin: true,
+  omega3: true,
+  vitaminD: false,
+});
+const takenCount = Object.values(taken).filter(Boolean).length;
+const totalDoses = Object.keys(taken).length;
+const adherencePercentage = Math.round((takenCount / totalDoses) * 100);
+const remainingDoses = totalDoses - takenCount;
+const nextDose = !taken.metformin
+  ? { time: "Morning", medicine: "Metformin" }
+  : !taken.omega3
+  ? { time: "Afternoon", medicine: "Omega 3" }
+  : !taken.vitaminD
+  ? { time: "7:30 PM", medicine: "Vitamin D" }
+  : null;
+
   const hour = new Date().getHours();
   const today = new Date();
 
@@ -119,11 +137,11 @@ const formattedDate = today.toLocaleDateString("en-US", {
             </p>
 
             <h3 className="text-3xl font-bold mt-1">
-              92%
+              {adherencePercentage}%
             </h3>
 
             <div className="w-full h-2 bg-white/10 rounded-full mt-4">
-              <div className="h-2 w-[92%] bg-gradient-to-r from-cyan-400 to-teal-400 rounded-full" />
+              <div className="h-2 style={{ width: `${adherencePercentage}%` }} bg-gradient-to-r from-cyan-400 to-teal-400 rounded-full" />
             </div>
 
           </div>
@@ -141,11 +159,15 @@ const formattedDate = today.toLocaleDateString("en-US", {
             </p>
 
             <h3 className="text-3xl font-bold mt-1">
-              3 / 4
+              {takenCount} / {totalDoses}
             </h3>
 
             <p className="text-xs text-slate-500 mt-2">
-              One dose remaining
+              {remainingDoses === 0
+               ? "All doses completed"
+               : remainingDoses === 1
+               ? "One dose remaining"
+               : `${remainingDoses} doses remaining`}
             </p>
 
           </div>
@@ -163,11 +185,11 @@ const formattedDate = today.toLocaleDateString("en-US", {
             </p>
 
             <h3 className="text-3xl font-bold mt-1">
-              7:30 PM
+              {nextDose ? nextDose.time : "All done"}
             </h3>
 
             <p className="text-xs text-slate-500 mt-2">
-              Vitamin D
+              {nextDose ? nextDose.medicine : "No doses remaining"}
             </p>
 
           </div>
@@ -251,10 +273,29 @@ const formattedDate = today.toLocaleDateString("en-US", {
 
               </div>
 
-              <div className="flex items-center gap-2 text-emerald-400 text-sm">
-                <CheckCircle2 size={18} />
-                Taken
-              </div>
+              <button
+  onClick={() =>
+    setTaken({
+      ...taken,
+      metformin: !taken.metformin,
+    })
+  }
+  className={`flex items-center gap-2 text-sm ${
+    taken.metformin ? "text-emerald-400" : "text-orange-400"
+  }`}
+>
+  {taken.metformin ? (
+    <>
+      <CheckCircle2 size={18} />
+      Taken
+    </>
+  ) : (
+    <>
+      <Clock3 size={18} />
+      Upcoming
+    </>
+  )}
+</button>
 
             </div>
 
@@ -280,10 +321,29 @@ const formattedDate = today.toLocaleDateString("en-US", {
 
               </div>
 
-              <div className="flex items-center gap-2 text-emerald-400 text-sm">
-                <CheckCircle2 size={18} />
-                Taken
-              </div>
+              <button
+  onClick={() =>
+    setTaken((prev) => ({
+      ...prev,
+      omega3: !prev.omega3,
+    }))
+  }
+  className={`flex items-center gap-2 text-sm ${
+    taken.omega3 ? "text-emerald-400" : "text-orange-400"
+  }`}
+>
+  {taken.omega3 ? (
+    <>
+      <CheckCircle2 size={18} />
+      Taken
+    </>
+  ) : (
+    <>
+      <Clock3 size={18} />
+      Upcoming
+    </>
+  )}
+</button>
 
             </div>
 
@@ -309,10 +369,29 @@ const formattedDate = today.toLocaleDateString("en-US", {
 
               </div>
 
-              <div className="flex items-center gap-2 text-orange-400 text-sm">
-                <Clock3 size={18} />
-                Upcoming
-              </div>
+              <button
+  onClick={() =>
+    setTaken((prev) => ({
+      ...prev,
+      vitaminD: !prev.vitaminD,
+    }))
+  }
+  className={`flex items-center gap-2 text-sm ${
+    taken.vitaminD ? "text-emerald-400" : "text-orange-400"
+  }`}
+>
+  {taken.vitaminD ? (
+    <>
+      <CheckCircle2 size={18} />
+      Taken
+    </>
+  ) : (
+    <>
+      <Clock3 size={18} />
+      Upcoming
+    </>
+  )}
+</button>
 
             </div>
 
