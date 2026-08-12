@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   Bell,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   HeartPulse,
@@ -10,6 +9,8 @@ import {
   TrendingUp,
   UserRound,
   ArrowRight,
+  BarChart3,
+  MessageCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -72,12 +73,14 @@ function loadMedicines() {
 function Dashboard() {
   const [medicines, setMedicines] = useState(loadMedicines);
 
-  /* Load latest medicine data whenever Dashboard opens */
+  /* ================= LOAD MEDICINES ================= */
+
   useEffect(() => {
     setMedicines(loadMedicines());
   }, []);
 
-  /* Refresh if localStorage changes */
+  /* ================= REFRESH LOCAL STORAGE ================= */
+
   useEffect(() => {
     const handleStorageChange = () => {
       setMedicines(loadMedicines());
@@ -95,6 +98,8 @@ function Dashboard() {
       );
     };
   }, []);
+
+  /* ================= DATE / GREETING ================= */
 
   const now = new Date();
   const hour = now.getHours();
@@ -115,6 +120,8 @@ function Dashboard() {
     greeting = "GOOD NIGHT";
   }
 
+  /* ================= MEDICATION CALCULATIONS ================= */
+
   const totalDoses = medicines.length;
 
   const takenCount = medicines.filter(
@@ -134,6 +141,8 @@ function Dashboard() {
   const nextDose = medicines.find(
     (medicine) => !medicine.taken
   );
+
+  /* ================= TOGGLE MEDICINE ================= */
 
   const toggleTaken = (id) => {
     const updated = medicines.map((medicine) =>
@@ -156,7 +165,9 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-[#08111F] text-white">
 
-      {/* ================= NAVBAR ================= */}
+      {/* =====================================================
+          NAVBAR
+      ===================================================== */}
 
       <nav className="border-b border-white/10 bg-[#0A1724]/90 backdrop-blur-xl">
 
@@ -185,15 +196,39 @@ function Dashboard() {
 
           {/* NAVIGATION */}
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+
+            {/* MEDICINES */}
 
             <Link
               to="/medicines"
-              className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full bg-cyan-400 text-[#08111F] font-semibold hover:bg-cyan-300 transition"
+              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-cyan-400 text-[#08111F] font-semibold hover:bg-cyan-300 transition"
             >
-              <Pill size={18} />
+              <Pill size={17} />
               Medicines
             </Link>
+
+            {/* ANALYTICS */}
+
+            <Link
+              to="/analytics"
+              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/30 transition"
+            >
+              <BarChart3 size={17} />
+              Analytics
+            </Link>
+
+            {/* AI CHAT */}
+
+            <Link
+              to="/aichat"
+              className="hidden lg:flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/30 transition"
+            >
+              <MessageCircle size={17} />
+              AI Chat
+            </Link>
+
+            {/* NOTIFICATION */}
 
             <button
               className="relative w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center"
@@ -207,6 +242,8 @@ function Dashboard() {
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-400" />
 
             </button>
+
+            {/* USER */}
 
             <div className="flex items-center gap-3">
 
@@ -239,11 +276,15 @@ function Dashboard() {
 
       </nav>
 
-      {/* ================= MAIN ================= */}
+      {/* =====================================================
+          MAIN
+      ===================================================== */}
 
       <main className="max-w-7xl mx-auto px-6 py-12">
 
-        {/* HERO */}
+        {/* ===================================================
+            HERO
+        =================================================== */}
 
         <section className="mb-12">
 
@@ -263,7 +304,9 @@ function Dashboard() {
 
         </section>
 
-        {/* ================= STAT CARDS ================= */}
+        {/* ===================================================
+            STAT CARDS
+        =================================================== */}
 
         <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
 
@@ -420,7 +463,134 @@ function Dashboard() {
 
         </section>
 
-        {/* ================= LOWER SECTION ================= */}
+        {/* ===================================================
+            QUICK ACTIONS
+        =================================================== */}
+
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+
+          <Link
+            to="/medicines"
+            className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-cyan-400/30 hover:bg-cyan-400/5 transition"
+          >
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-4">
+
+                <div className="w-11 h-11 rounded-xl bg-cyan-400/10 flex items-center justify-center">
+
+                  <Pill
+                    size={20}
+                    className="text-cyan-400"
+                  />
+
+                </div>
+
+                <div>
+                  <p className="font-semibold">
+                    Manage Medicines
+                  </p>
+
+                  <p className="text-sm text-slate-500">
+                    Add or update medications
+                  </p>
+                </div>
+
+              </div>
+
+              <ArrowRight
+                size={19}
+                className="text-slate-600 group-hover:text-cyan-400 transition"
+              />
+
+            </div>
+
+          </Link>
+
+          <Link
+            to="/analytics"
+            className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-cyan-400/30 hover:bg-cyan-400/5 transition"
+          >
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-4">
+
+                <div className="w-11 h-11 rounded-xl bg-purple-400/10 flex items-center justify-center">
+
+                  <BarChart3
+                    size={20}
+                    className="text-purple-400"
+                  />
+
+                </div>
+
+                <div>
+                  <p className="font-semibold">
+                    View Analytics
+                  </p>
+
+                  <p className="text-sm text-slate-500">
+                    Track adherence trends
+                  </p>
+                </div>
+
+              </div>
+
+              <ArrowRight
+                size={19}
+                className="text-slate-600 group-hover:text-cyan-400 transition"
+              />
+
+            </div>
+
+          </Link>
+
+          <Link
+            to="/aichat"
+            className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-cyan-400/30 hover:bg-cyan-400/5 transition"
+          >
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-4">
+
+                <div className="w-11 h-11 rounded-xl bg-emerald-400/10 flex items-center justify-center">
+
+                  <MessageCircle
+                    size={20}
+                    className="text-emerald-400"
+                  />
+
+                </div>
+
+                <div>
+                  <p className="font-semibold">
+                    Ask DoseTwin AI
+                  </p>
+
+                  <p className="text-sm text-slate-500">
+                    Get medication insights
+                  </p>
+                </div>
+
+              </div>
+
+              <ArrowRight
+                size={19}
+                className="text-slate-600 group-hover:text-cyan-400 transition"
+              />
+
+            </div>
+
+          </Link>
+
+        </section>
+
+        {/* ===================================================
+            LOWER SECTION
+        =================================================== */}
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
