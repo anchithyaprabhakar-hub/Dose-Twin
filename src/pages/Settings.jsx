@@ -1,30 +1,39 @@
 import { useEffect, useState } from "react";
 
 import {
-  UserRound,
+  User,
   Bell,
-  Pill,
-  Users,
-  ShieldCheck,
-  Database,
-  Trash2,
+  Bluetooth,
+  Wifi,
+  Shield,
   Save,
+  RotateCcw,
+  Unplug,
   CheckCircle2,
-  AlertTriangle,
 } from "lucide-react";
 
 const SETTINGS_KEY = "dosetwin_settings";
-const MEDICINES_KEY = "dosetwin_medicines";
-const CAREGIVERS_KEY = "dosetwin_caregivers";
 
 const defaultSettings = {
-  name: "Patient",
-  email: "",
-  medicationReminders: true,
-  caregiverNotifications: true,
-  adherenceAlerts: true,
-};
+  fullName: "Aditi Sharma",
+  email: "aditi.sharma@example.com",
+  phone: "+91 98765 43210",
+  timezone: "Asia/Kolkata",
 
+  notifications: {
+    doseReminders: true,
+    missedDoseAlerts: true,
+    lowStockAlerts: true,
+    weeklySummary: true,
+    caregiverAlerts: false,
+  },
+
+  dispenser: {
+    paired: true,
+    wifi: "Home-5G",
+    syncFrequency: "Real-time",
+  },
+};
 
 /* =========================================================
    LOAD SETTINGS
@@ -32,8 +41,7 @@ const defaultSettings = {
 
 function loadSettings() {
   try {
-    const stored =
-      localStorage.getItem(SETTINGS_KEY);
+    const stored = localStorage.getItem(SETTINGS_KEY);
 
     if (!stored) {
       return defaultSettings;
@@ -44,15 +52,67 @@ function loadSettings() {
     return {
       ...defaultSettings,
       ...parsed,
+      notifications: {
+        ...defaultSettings.notifications,
+        ...(parsed.notifications || {}),
+      },
+      dispenser: {
+        ...defaultSettings.dispenser,
+        ...(parsed.dispenser || {}),
+      },
     };
   } catch (error) {
-    console.error(
-      "Could not load settings:",
-      error
-    );
-
+    console.error("Could not load settings:", error);
     return defaultSettings;
   }
+}
+
+
+/* =========================================================
+   TOGGLE COMPONENT
+========================================================= */
+
+function Toggle({ enabled, onChange }) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      aria-pressed={enabled}
+      className={`
+        relative
+        w-[54px]
+        h-[30px]
+        rounded-full
+        transition-all
+        duration-200
+        shrink-0
+        ${
+          enabled
+            ? "bg-cyan-400"
+            : "bg-slate-700"
+        }
+      `}
+    >
+      <span
+        className={`
+          absolute
+          top-[4px]
+          w-[22px]
+          h-[22px]
+          rounded-full
+          bg-white
+          shadow-md
+          transition-all
+          duration-200
+          ${
+            enabled
+              ? "left-[28px]"
+              : "left-[4px]"
+          }
+        `}
+      />
+    </button>
+  );
 }
 
 
@@ -66,148 +126,111 @@ function Settings() {
 
   const [saved, setSaved] = useState(false);
 
-  const [medicineCount, setMedicineCount] =
-    useState(0);
-
-  const [caregiverCount, setCaregiverCount] =
-    useState(0);
-
-
-  /* =======================================================
-     LOAD COUNTS
-  ======================================================= */
-
-  const refreshCounts = () => {
-    try {
-      const medicines = JSON.parse(
-        localStorage.getItem(MEDICINES_KEY) ||
-          "[]"
-      );
-
-      const caregivers = JSON.parse(
-        localStorage.getItem(CAREGIVERS_KEY) ||
-          "[]"
-      );
-
-      setMedicineCount(
-        Array.isArray(medicines)
-          ? medicines.length
-          : 0
-      );
-
-      setCaregiverCount(
-        Array.isArray(caregivers)
-          ? caregivers.length
-          : 0
-      );
-    } catch (error) {
-      console.error(
-        "Could not load data counts:",
-        error
-      );
-    }
-  };
-
-
-  useEffect(() => {
-    refreshCounts();
-  }, []);
-
-
-  /* =======================================================
-     UPDATE SETTING
-  ======================================================= */
-
-  const updateSetting = (
-    key,
-    value
-  ) => {
-    setSettings((previous) => ({
-      ...previous,
-      [key]: value,
-    }));
-
-    setSaved(false);
-  };
-
 
   /* =======================================================
      SAVE SETTINGS
   ======================================================= */
 
   const saveSettings = () => {
-    try {
-      localStorage.setItem(
-        SETTINGS_KEY,
-        JSON.stringify(settings)
-      );
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify(settings)
+    );
 
-      setSaved(true);
+    setSaved(true);
 
-      setTimeout(() => {
-        setSaved(false);
-      }, 2500);
-    } catch (error) {
-      console.error(
-        "Could not save settings:",
-        error
-      );
-    }
+    setTimeout(() => {
+      setSaved(false);
+    }, 2000);
   };
 
 
   /* =======================================================
-     CLEAR MEDICINES
+     UPDATE PROFILE
   ======================================================= */
 
-  const clearMedicines = () => {
+  const updateProfile = (field, value) => {
+    setSettings((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+
+  /* =======================================================
+     UPDATE NOTIFICATION
+  ======================================================= */
+
+  const updateNotification = (
+    notification,
+    value
+  ) => {
+    setSettings((current) => ({
+      ...current,
+
+      notifications: {
+        ...current.notifications,
+
+        [notification]: value,
+      },
+    }));
+  };
+
+
+  /* =======================================================
+     UPDATE DISPENSER
+  ======================================================= */
+
+  const updateDispenser = (
+    field,
+    value
+  ) => {
+    setSettings((current) => ({
+      ...current,
+
+      dispenser: {
+        ...current.dispenser,
+
+        [field]: value,
+      },
+    }));
+  };
+
+
+  /* =======================================================
+     UNPAIR DISPENSER
+  ======================================================= */
+
+  const unpairDevice = () => {
     const confirmed = window.confirm(
-      "Are you sure you want to delete all medicines? This cannot be undone."
+      "Are you sure you want to unpair the DoseTwin Dispenser?"
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    localStorage.removeItem(
-      MEDICINES_KEY
-    );
-
-    setMedicineCount(0);
-
-    window.dispatchEvent(
-      new StorageEvent("storage", {
-        key: MEDICINES_KEY,
-        newValue: null,
-      })
+    updateDispenser(
+      "paired",
+      false
     );
   };
 
 
   /* =======================================================
-     CLEAR CAREGIVERS
+     RESET SETTINGS
   ======================================================= */
 
-  const clearCaregivers = () => {
+  const resetDefaults = () => {
     const confirmed = window.confirm(
-      "Are you sure you want to remove all caregivers? This cannot be undone."
+      "Reset all DoseTwin settings to their default values?"
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    localStorage.removeItem(
-      CAREGIVERS_KEY
-    );
+    setSettings(defaultSettings);
 
-    setCaregiverCount(0);
-
-    window.dispatchEvent(
-      new StorageEvent("storage", {
-        key: CAREGIVERS_KEY,
-        newValue: null,
-      })
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify(defaultSettings)
     );
   };
 
@@ -215,10 +238,14 @@ function Settings() {
   return (
     <div className="min-h-screen bg-[#08111F] text-white">
 
+      {/* ===================================================
+          MAIN CONTENT
+      =================================================== */}
+
       <main className="max-w-[1400px] mx-auto px-6 md:px-8 py-10">
 
         {/* =================================================
-            HEADER
+            PAGE HEADER
         ================================================= */}
 
         <section className="mb-10">
@@ -227,82 +254,35 @@ function Settings() {
             SYSTEM SETTINGS
           </p>
 
-          <div
-            className="
-              flex
-              flex-col
-              md:flex-row
-              md:items-end
-              md:justify-between
-              gap-5
-            "
-          >
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+            Settings
+          </h1>
 
-            <div>
-
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-                Settings
-              </h1>
-
-              <p className="text-lg text-slate-400 mt-4 max-w-3xl">
-                Manage your DoseTwin profile,
-                notifications, and stored data.
-              </p>
-
-            </div>
-
-
-            {/* SAVE */}
-
-            <button
-              onClick={saveSettings}
-              className="
-                flex
-                items-center
-                justify-center
-                gap-2
-                px-6
-                py-3
-                rounded-xl
-                bg-cyan-400
-                hover:bg-cyan-300
-                text-[#06111f]
-                font-semibold
-                transition
-              "
-            >
-
-              {saved ? (
-                <CheckCircle2 size={19} />
-              ) : (
-                <Save size={19} />
-              )}
-
-              {saved
-                ? "Saved"
-                : "Save changes"}
-
-            </button>
-
-          </div>
+          <p className="text-lg text-slate-400 mt-4 max-w-3xl">
+            Manage your account, notifications,
+            and paired dispenser.
+          </p>
 
         </section>
 
 
         {/* =================================================
-            PROFILE
+            ACCOUNT
         ================================================= */}
 
         <section
           className="
-            rounded-2xl
+            rounded-3xl
             border
             border-white/10
-            bg-white/5
+            bg-[#101c2d]
             p-7
+            md:p-8
             mb-6
           "
         >
+
+          {/* CARD HEADER */}
 
           <div className="flex items-center gap-4 mb-8">
 
@@ -315,10 +295,11 @@ function Settings() {
                 flex
                 items-center
                 justify-center
+                shrink-0
               "
             >
 
-              <UserRound
+              <User
                 size={24}
                 className="text-cyan-400"
               />
@@ -328,11 +309,11 @@ function Settings() {
             <div>
 
               <h2 className="text-2xl font-semibold">
-                Profile
+                Account
               </h2>
 
               <p className="text-slate-500 mt-1">
-                Manage your personal information.
+                Your personal details and locale.
               </p>
 
             </div>
@@ -340,38 +321,49 @@ function Settings() {
           </div>
 
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* PROFILE GRID */}
 
-            {/* NAME */}
+          <div
+            className="
+              grid
+              grid-cols-1
+              md:grid-cols-2
+              gap-x-5
+              gap-y-6
+            "
+          >
+
+            {/* FULL NAME */}
 
             <div>
 
               <label className="block text-sm text-slate-400 mb-2">
-                Name
+                Full name
               </label>
 
               <input
                 type="text"
-                value={settings.name}
+                value={settings.fullName}
                 onChange={(event) =>
-                  updateSetting(
-                    "name",
+                  updateProfile(
+                    "fullName",
                     event.target.value
                   )
                 }
-                placeholder="Your name"
                 className="
                   w-full
-                  h-12
+                  h-14
                   rounded-xl
                   border
                   border-white/10
-                  bg-white/5
+                  bg-[#182437]
                   px-4
                   text-white
-                  placeholder:text-slate-600
                   outline-none
+                  transition
                   focus:border-cyan-400/50
+                  focus:ring-2
+                  focus:ring-cyan-400/10
                 "
               />
 
@@ -390,28 +382,166 @@ function Settings() {
                 type="email"
                 value={settings.email}
                 onChange={(event) =>
-                  updateSetting(
+                  updateProfile(
                     "email",
                     event.target.value
                   )
                 }
-                placeholder="you@example.com"
                 className="
                   w-full
-                  h-12
+                  h-14
                   rounded-xl
                   border
                   border-white/10
-                  bg-white/5
+                  bg-[#182437]
                   px-4
                   text-white
-                  placeholder:text-slate-600
                   outline-none
+                  transition
                   focus:border-cyan-400/50
+                  focus:ring-2
+                  focus:ring-cyan-400/10
                 "
               />
 
             </div>
+
+
+            {/* PHONE */}
+
+            <div>
+
+              <label className="block text-sm text-slate-400 mb-2">
+                Phone
+              </label>
+
+              <input
+                type="tel"
+                value={settings.phone}
+                onChange={(event) =>
+                  updateProfile(
+                    "phone",
+                    event.target.value
+                  )
+                }
+                className="
+                  w-full
+                  h-14
+                  rounded-xl
+                  border
+                  border-white/10
+                  bg-[#182437]
+                  px-4
+                  text-white
+                  outline-none
+                  transition
+                  focus:border-cyan-400/50
+                  focus:ring-2
+                  focus:ring-cyan-400/10
+                "
+              />
+
+            </div>
+
+
+            {/* TIMEZONE */}
+
+            <div>
+
+              <label className="block text-sm text-slate-400 mb-2">
+                Timezone
+              </label>
+
+              <select
+                value={settings.timezone}
+                onChange={(event) =>
+                  updateProfile(
+                    "timezone",
+                    event.target.value
+                  )
+                }
+                className="
+                  w-full
+                  h-14
+                  rounded-xl
+                  border
+                  border-white/10
+                  bg-[#182437]
+                  px-4
+                  text-white
+                  outline-none
+                  cursor-pointer
+                  focus:border-cyan-400/50
+                "
+              >
+
+                <option value="Asia/Kolkata">
+                  Asia/Kolkata
+                </option>
+
+                <option value="Asia/Dubai">
+                  Asia/Dubai
+                </option>
+
+                <option value="Asia/Singapore">
+                  Asia/Singapore
+                </option>
+
+                <option value="Europe/London">
+                  Europe/London
+                </option>
+
+                <option value="America/New_York">
+                  America/New_York
+                </option>
+
+                <option value="America/Los_Angeles">
+                  America/Los_Angeles
+                </option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+
+          {/* SAVE */}
+
+          <div className="flex justify-end mt-7">
+
+            <button
+              type="button"
+              onClick={saveSettings}
+              className="
+                flex
+                items-center
+                gap-2
+                px-6
+                py-3
+                rounded-full
+                bg-cyan-400
+                text-[#06111f]
+                font-semibold
+                hover:bg-cyan-300
+                transition
+                shadow-[0_0_30px_rgba(34,211,238,0.12)]
+              "
+            >
+
+              {saved ? (
+                <>
+                  <CheckCircle2 size={18} />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  Save changes
+                </>
+              )}
+
+            </button>
 
           </div>
 
@@ -424,14 +554,17 @@ function Settings() {
 
         <section
           className="
-            rounded-2xl
+            rounded-3xl
             border
             border-white/10
-            bg-white/5
+            bg-[#101c2d]
             p-7
+            md:p-8
             mb-6
           "
         >
+
+          {/* HEADER */}
 
           <div className="flex items-center gap-4 mb-8">
 
@@ -440,16 +573,17 @@ function Settings() {
                 w-12
                 h-12
                 rounded-xl
-                bg-purple-400/10
+                bg-cyan-400/10
                 flex
                 items-center
                 justify-center
+                shrink-0
               "
             >
 
               <Bell
                 size={24}
-                className="text-purple-400"
+                className="text-cyan-400"
               />
 
             </div>
@@ -461,8 +595,7 @@ function Settings() {
               </h2>
 
               <p className="text-slate-500 mt-1">
-                Control how DoseTwin keeps you
-                informed.
+                Choose what DoseTwin should notify you about.
               </p>
 
             </div>
@@ -470,60 +603,219 @@ function Settings() {
           </div>
 
 
-          <div className="space-y-4">
+          <div>
 
-            {/* MEDICATION REMINDERS */}
+            {/* DOSE REMINDERS */}
 
-            <ToggleRow
-              icon={<Pill size={21} />}
-              title="Medication reminders"
-              description="Receive reminders when it is time to take a medication."
-              checked={
-                settings.medicationReminders
-              }
-              onChange={(value) =>
-                updateSetting(
-                  "medicationReminders",
-                  value
-                )
-              }
-            />
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-6
+                py-5
+                border-b
+                border-white/10
+              "
+            >
+
+              <div>
+
+                <h3 className="text-lg font-medium">
+                  Dose reminders
+                </h3>
+
+                <p className="text-slate-500 mt-1">
+                  Get pinged when it's time to take a dose.
+                </p>
+
+              </div>
+
+              <Toggle
+                enabled={
+                  settings.notifications
+                    .doseReminders
+                }
+                onChange={() =>
+                  updateNotification(
+                    "doseReminders",
+                    !settings.notifications
+                      .doseReminders
+                  )
+                }
+              />
+
+            </div>
 
 
-            {/* CAREGIVER */}
+            {/* MISSED DOSE */}
 
-            <ToggleRow
-              icon={<Users size={21} />}
-              title="Caregiver notifications"
-              description="Allow connected caregivers to receive medication updates."
-              checked={
-                settings.caregiverNotifications
-              }
-              onChange={(value) =>
-                updateSetting(
-                  "caregiverNotifications",
-                  value
-                )
-              }
-            />
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-6
+                py-5
+                border-b
+                border-white/10
+              "
+            >
+
+              <div>
+
+                <h3 className="text-lg font-medium">
+                  Missed dose alerts
+                </h3>
+
+                <p className="text-slate-500 mt-1">
+                  Notify me if a scheduled dose wasn't taken.
+                </p>
+
+              </div>
+
+              <Toggle
+                enabled={
+                  settings.notifications
+                    .missedDoseAlerts
+                }
+                onChange={() =>
+                  updateNotification(
+                    "missedDoseAlerts",
+                    !settings.notifications
+                      .missedDoseAlerts
+                  )
+                }
+              />
+
+            </div>
 
 
-            {/* ADHERENCE */}
+            {/* LOW STOCK */}
 
-            <ToggleRow
-              icon={<ShieldCheck size={21} />}
-              title="Adherence alerts"
-              description="Get notified when medication adherence drops."
-              checked={
-                settings.adherenceAlerts
-              }
-              onChange={(value) =>
-                updateSetting(
-                  "adherenceAlerts",
-                  value
-                )
-              }
-            />
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-6
+                py-5
+                border-b
+                border-white/10
+              "
+            >
+
+              <div>
+
+                <h3 className="text-lg font-medium">
+                  Low stock alerts
+                </h3>
+
+                <p className="text-slate-500 mt-1">
+                  Warn me before a medicine runs out.
+                </p>
+
+              </div>
+
+              <Toggle
+                enabled={
+                  settings.notifications
+                    .lowStockAlerts
+                }
+                onChange={() =>
+                  updateNotification(
+                    "lowStockAlerts",
+                    !settings.notifications
+                      .lowStockAlerts
+                  )
+                }
+              />
+
+            </div>
+
+
+            {/* WEEKLY SUMMARY */}
+
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-6
+                py-5
+                border-b
+                border-white/10
+              "
+            >
+
+              <div>
+
+                <h3 className="text-lg font-medium">
+                  Weekly summary
+                </h3>
+
+                <p className="text-slate-500 mt-1">
+                  A recap of adherence and refills every Sunday.
+                </p>
+
+              </div>
+
+              <Toggle
+                enabled={
+                  settings.notifications
+                    .weeklySummary
+                }
+                onChange={() =>
+                  updateNotification(
+                    "weeklySummary",
+                    !settings.notifications
+                      .weeklySummary
+                  )
+                }
+              />
+
+            </div>
+
+
+            {/* CAREGIVER ALERTS */}
+
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-6
+                py-5
+              "
+            >
+
+              <div>
+
+                <h3 className="text-lg font-medium">
+                  Caregiver alerts
+                </h3>
+
+                <p className="text-slate-500 mt-1">
+                  Let linked caregivers see missed-dose alerts too.
+                </p>
+
+              </div>
+
+              <Toggle
+                enabled={
+                  settings.notifications
+                    .caregiverAlerts
+                }
+                onChange={() =>
+                  updateNotification(
+                    "caregiverAlerts",
+                    !settings.notifications
+                      .caregiverAlerts
+                  )
+                }
+              />
+
+            </div>
 
           </div>
 
@@ -531,37 +823,41 @@ function Settings() {
 
 
         {/* =================================================
-            DATA OVERVIEW
+            DISPENSER PAIRING
         ================================================= */}
 
         <section
           className="
-            rounded-2xl
+            rounded-3xl
             border
             border-white/10
-            bg-white/5
+            bg-[#101c2d]
             p-7
+            md:p-8
             mb-6
           "
         >
 
-          <div className="flex items-center gap-4 mb-8">
+          {/* HEADER */}
+
+          <div className="flex items-center gap-4 mb-7">
 
             <div
               className="
                 w-12
                 h-12
                 rounded-xl
-                bg-emerald-400/10
+                bg-cyan-400/10
                 flex
                 items-center
                 justify-center
+                shrink-0
               "
             >
 
-              <Database
+              <Bluetooth
                 size={24}
-                className="text-emerald-400"
+                className="text-cyan-400"
               />
 
             </div>
@@ -569,12 +865,11 @@ function Settings() {
             <div>
 
               <h2 className="text-2xl font-semibold">
-                Your data
+                Dispenser pairing
               </h2>
 
               <p className="text-slate-500 mt-1">
-                Overview of the information stored
-                in this browser.
+                Manage the physical device linked to this account.
               </p>
 
             </div>
@@ -582,87 +877,269 @@ function Settings() {
           </div>
 
 
+          {/* DEVICE */}
+
           <div
             className="
-              grid
-              grid-cols-1
-              md:grid-cols-2
-              gap-5
+              flex
+              items-center
+              justify-between
+              gap-4
+              rounded-xl
+              bg-[#16243a]
+              px-5
+              py-4
+              mb-6
             "
           >
 
-            {/* MEDICINES */}
+            <div className="flex items-center gap-4">
 
-            <div
-              className="
-                rounded-2xl
-                border
-                border-white/10
-                bg-[#101c2d]
-                p-6
-              "
-            >
+              <div
+                className="
+                  w-10
+                  h-10
+                  rounded-lg
+                  bg-cyan-400/10
+                  flex
+                  items-center
+                  justify-center
+                "
+              >
 
-              <div className="flex items-center justify-between">
-
-                <div>
-
-                  <p className="text-slate-400">
-                    Medicines
-                  </p>
-
-                  <h3 className="text-3xl font-bold mt-2">
-                    {medicineCount}
-                  </h3>
-
-                </div>
-
-                <Pill
-                  size={27}
+                <Wifi
+                  size={20}
                   className="text-cyan-400"
                 />
 
               </div>
 
-            </div>
+              <div>
 
+                <p className="font-medium">
+                  DoseTwin Dispenser
+                </p>
 
-            {/* CAREGIVERS */}
-
-            <div
-              className="
-                rounded-2xl
-                border
-                border-white/10
-                bg-[#101c2d]
-                p-6
-              "
-            >
-
-              <div className="flex items-center justify-between">
-
-                <div>
-
-                  <p className="text-slate-400">
-                    Caregivers
-                  </p>
-
-                  <h3 className="text-3xl font-bold mt-2">
-                    {caregiverCount}
-                  </h3>
-
-                </div>
-
-                <Users
-                  size={27}
-                  className="text-purple-400"
-                />
+                <p className="text-sm text-slate-500">
+                  {settings.dispenser.paired
+                    ? `Connected · ${settings.dispenser.wifi}`
+                    : "Not connected"}
+                </p>
 
               </div>
 
             </div>
 
+
+            {settings.dispenser.paired && (
+
+              <span
+                className="
+                  px-3
+                  py-1.5
+                  rounded-full
+                  bg-cyan-400/10
+                  text-cyan-300
+                  text-sm
+                  font-medium
+                "
+              >
+                PAIRED
+              </span>
+
+            )}
+
           </div>
+
+
+          {/* DEVICE SETTINGS */}
+
+          {settings.dispenser.paired ? (
+
+            <>
+              <div
+                className="
+                  grid
+                  grid-cols-1
+                  md:grid-cols-2
+                  gap-5
+                "
+              >
+
+                {/* WIFI */}
+
+                <div>
+
+                  <label className="block text-sm text-slate-400 mb-2">
+                    Wi-Fi network
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      settings.dispenser.wifi
+                    }
+                    onChange={(event) =>
+                      updateDispenser(
+                        "wifi",
+                        event.target.value
+                      )
+                    }
+                    className="
+                      w-full
+                      h-14
+                      rounded-xl
+                      border
+                      border-white/10
+                      bg-[#182437]
+                      px-4
+                      text-white
+                      outline-none
+                      focus:border-cyan-400/50
+                    "
+                  />
+
+                </div>
+
+
+                {/* SYNC */}
+
+                <div>
+
+                  <label className="block text-sm text-slate-400 mb-2">
+                    Sync frequency
+                  </label>
+
+                  <select
+                    value={
+                      settings.dispenser
+                        .syncFrequency
+                    }
+                    onChange={(event) =>
+                      updateDispenser(
+                        "syncFrequency",
+                        event.target.value
+                      )
+                    }
+                    className="
+                      w-full
+                      h-14
+                      rounded-xl
+                      border
+                      border-white/10
+                      bg-[#182437]
+                      px-4
+                      text-white
+                      outline-none
+                      cursor-pointer
+                      focus:border-cyan-400/50
+                    "
+                  >
+
+                    <option value="Real-time">
+                      Real-time
+                    </option>
+
+                    <option value="Every 5 minutes">
+                      Every 5 minutes
+                    </option>
+
+                    <option value="Every 15 minutes">
+                      Every 15 minutes
+                    </option>
+
+                    <option value="Hourly">
+                      Hourly
+                    </option>
+
+                  </select>
+
+                </div>
+
+              </div>
+
+
+              {/* UNPAIR */}
+
+              <div className="flex justify-end mt-6">
+
+                <button
+                  type="button"
+                  onClick={unpairDevice}
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    px-5
+                    py-3
+                    rounded-full
+                    border
+                    border-slate-600
+                    text-slate-300
+                    hover:border-red-400/50
+                    hover:text-red-400
+                    transition
+                  "
+                >
+
+                  <Unplug size={17} />
+
+                  Unpair device
+
+                </button>
+
+              </div>
+
+            </>
+
+          ) : (
+
+            <div
+              className="
+                rounded-xl
+                border
+                border-dashed
+                border-white/10
+                p-8
+                text-center
+              "
+            >
+
+              <Bluetooth
+                size={34}
+                className="mx-auto text-slate-600 mb-3"
+              />
+
+              <p className="text-slate-400">
+                No dispenser paired.
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updateDispenser(
+                    "paired",
+                    true
+                  )
+                }
+                className="
+                  mt-5
+                  px-6
+                  py-3
+                  rounded-full
+                  bg-cyan-400
+                  text-[#06111f]
+                  font-semibold
+                  hover:bg-cyan-300
+                  transition
+                "
+              >
+                Pair dispenser
+              </button>
+
+            </div>
+
+          )}
 
         </section>
 
@@ -673,31 +1150,35 @@ function Settings() {
 
         <section
           className="
-            rounded-2xl
+            rounded-3xl
             border
-            border-red-400/20
-            bg-red-400/5
+            border-red-400/25
+            bg-[#121522]
             p-7
+            md:p-8
+            mb-8
           "
         >
 
-          <div className="flex items-center gap-4 mb-8">
+          {/* HEADER */}
+
+          <div className="flex items-center gap-4 mb-7">
 
             <div
               className="
                 w-12
                 h-12
                 rounded-xl
-                bg-red-400/10
+                bg-cyan-400/10
                 flex
                 items-center
                 justify-center
               "
             >
 
-              <AlertTriangle
+              <Shield
                 size={24}
-                className="text-red-400"
+                className="text-cyan-400"
               />
 
             </div>
@@ -705,12 +1186,11 @@ function Settings() {
             <div>
 
               <h2 className="text-2xl font-semibold">
-                Data management
+                Danger zone
               </h2>
 
               <p className="text-slate-500 mt-1">
-                Permanently remove stored DoseTwin
-                data from this browser.
+                Irreversible actions — proceed carefully.
               </p>
 
             </div>
@@ -718,136 +1198,53 @@ function Settings() {
           </div>
 
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* RESET */}
 
-            {/* CLEAR MEDICINES */}
+          <div
+            className="
+              flex
+              flex-col
+              md:flex-row
+              md:items-center
+              justify-between
+              gap-5
+            "
+          >
 
-            <div
-              className="
-                rounded-2xl
-                border
-                border-white/10
-                bg-[#101c2d]
-                p-5
-              "
-            >
+            <div>
 
-              <div className="flex items-start justify-between gap-4">
-
-                <div>
-
-                  <h3 className="font-semibold">
-                    Remove all medicines
-                  </h3>
-
-                  <p className="text-sm text-slate-500 mt-2">
-                    Delete every medicine currently
-                    stored in DoseTwin.
-                  </p>
-
-                </div>
-
-                <Pill
-                  size={21}
-                  className="text-red-400 shrink-0"
-                />
-
-              </div>
-
-
-              <button
-                onClick={clearMedicines}
-                className="
-                  mt-5
-                  flex
-                  items-center
-                  gap-2
-                  px-4
-                  py-2.5
-                  rounded-xl
-                  border
-                  border-red-400/20
-                  bg-red-400/10
-                  hover:bg-red-400/20
-                  text-red-400
-                  text-sm
-                  font-medium
-                  transition
-                "
-              >
-
-                <Trash2 size={16} />
-
-                Clear medicines
-
-              </button>
+              <p className="text-slate-400">
+                Reset all settings back to their default values.
+              </p>
 
             </div>
 
-
-            {/* CLEAR CAREGIVERS */}
-
-            <div
+            <button
+              type="button"
+              onClick={resetDefaults}
               className="
-                rounded-2xl
+                flex
+                items-center
+                justify-center
+                gap-2
+                px-6
+                py-3
+                rounded-full
                 border
-                border-white/10
-                bg-[#101c2d]
-                p-5
+                border-red-400/40
+                text-red-400
+                font-medium
+                hover:bg-red-400/10
+                transition
+                shrink-0
               "
             >
 
-              <div className="flex items-start justify-between gap-4">
+              <RotateCcw size={17} />
 
-                <div>
+              Reset to defaults
 
-                  <h3 className="font-semibold">
-                    Remove all caregivers
-                  </h3>
-
-                  <p className="text-sm text-slate-500 mt-2">
-                    Remove every caregiver connected
-                    to this account.
-                  </p>
-
-                </div>
-
-                <Users
-                  size={21}
-                  className="text-red-400 shrink-0"
-                />
-
-              </div>
-
-
-              <button
-                onClick={clearCaregivers}
-                className="
-                  mt-5
-                  flex
-                  items-center
-                  gap-2
-                  px-4
-                  py-2.5
-                  rounded-xl
-                  border
-                  border-red-400/20
-                  bg-red-400/10
-                  hover:bg-red-400/20
-                  text-red-400
-                  text-sm
-                  font-medium
-                  transition
-                "
-              >
-
-                <Trash2 size={16} />
-
-                Clear caregivers
-
-              </button>
-
-            </div>
+            </button>
 
           </div>
 
@@ -855,24 +1252,16 @@ function Settings() {
 
 
         {/* =================================================
-            FOOTER STATUS
+            FOOTER
         ================================================= */}
 
-        <div
-          className="
-            mt-8
-            flex
-            items-center
-            justify-center
-            gap-2
-            text-xs
-            text-slate-600
-          "
-        >
+        <div className="flex items-center justify-center gap-2 pb-6">
 
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
 
-          Settings are stored locally on this device
+          <span className="text-xs text-slate-600">
+            Settings are stored locally on this device
+          </span>
 
         </div>
 
@@ -881,114 +1270,5 @@ function Settings() {
     </div>
   );
 }
-
-
-/* =========================================================
-   TOGGLE COMPONENT
-========================================================= */
-
-function ToggleRow({
-  icon,
-  title,
-  description,
-  checked,
-  onChange,
-}) {
-  return (
-    <div
-      className="
-        flex
-        items-center
-        justify-between
-        gap-6
-        rounded-2xl
-        border
-        border-white/10
-        bg-[#101c2d]
-        p-5
-      "
-    >
-
-      <div className="flex items-center gap-4">
-
-        <div
-          className="
-            w-11
-            h-11
-            rounded-xl
-            bg-white/5
-            flex
-            items-center
-            justify-center
-            text-slate-400
-          "
-        >
-
-          {icon}
-
-        </div>
-
-
-        <div>
-
-          <p className="font-medium">
-            {title}
-          </p>
-
-          <p className="text-sm text-slate-500 mt-1">
-            {description}
-          </p>
-
-        </div>
-
-      </div>
-
-
-      <button
-        type="button"
-        onClick={() =>
-          onChange(!checked)
-        }
-        className={`
-          relative
-          w-12
-          h-7
-          rounded-full
-          transition
-          duration-200
-          shrink-0
-          ${
-            checked
-              ? "bg-cyan-400"
-              : "bg-slate-700"
-          }
-        `}
-        aria-label={`Toggle ${title}`}
-      >
-
-        <span
-          className={`
-            absolute
-            top-1
-            w-5
-            h-5
-            rounded-full
-            bg-white
-            transition
-            duration-200
-            ${
-              checked
-                ? "left-6"
-                : "left-1"
-            }
-          `}
-        />
-
-      </button>
-
-    </div>
-  );
-}
-
 
 export default Settings;
