@@ -1,86 +1,243 @@
+import { useEffect, useState } from "react";
 import {
-  Activity,
-  HeartPulse,
-  Pill,
-  TrendingUp,
-  ShieldCheck,
+  AlertTriangle,
+  BatteryMedium,
   Clock3,
+  Cpu,
+  History,
+  Link2,
+  RefreshCw,
+  Wifi,
+  Activity,
+  Pill,
 } from "lucide-react";
 
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+
+const STORAGE_KEY = "dosetwin_medicines";
+
+/* =========================================================
+   WEEKLY ADHERENCE
+========================================================= */
+
+const weeklyData = [
+  { day: "Mon", adherence: 100 },
+  { day: "Tue", adherence: 100 },
+  { day: "Wed", adherence: 86 },
+  { day: "Thu", adherence: 100 },
+  { day: "Fri", adherence: 100 },
+  { day: "Sat", adherence: 86 },
+  { day: "Sun", adherence: 100 },
+];
+
+/* =========================================================
+   SYNC LOG
+========================================================= */
+
+const syncLog = [
+  {
+    type: "success",
+    title: "Compartment synchronized",
+    time: "Today · 08:04 AM",
+  },
+  {
+    type: "success",
+    title: "Dispense confirmed",
+    time: "Today · 08:02 AM",
+  },
+  {
+    type: "warning",
+    title: "Missed dispense detected",
+    time: "Yesterday · 09:15 PM",
+  },
+  {
+    type: "sync",
+    title: "Firmware synced, v2.4.1",
+    time: "2 days ago",
+  },
+];
+
+/* =========================================================
+   RECENT ACTIVITY
+========================================================= */
+
+const recentActivity = [
+  {
+    type: "success",
+    title: "Medication taken",
+    time: "Today · 08:02 AM",
+  },
+  {
+    type: "warning",
+    title: "Medication missed",
+    time: "Yesterday · 09:15 PM",
+  },
+  {
+    type: "success",
+    title: "Medication taken",
+    time: "Yesterday · 08:05 AM",
+  },
+  {
+    type: "success",
+    title: "Medication taken",
+    time: "2 days ago · 10:02 PM",
+  },
+];
+
+/* =========================================================
+   LOAD MEDICINES
+========================================================= */
+
+function loadMedicines() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+
+    if (!stored) {
+      return [];
+    }
+
+    const parsed = JSON.parse(stored);
+
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error(
+      "Could not load medicines:",
+      error
+    );
+
+    return [];
+  }
+}
+
+/* =========================================================
+   DIGITAL TWIN
+========================================================= */
+
 function DigitalTwin() {
+  const [medicines, setMedicines] = useState(
+    loadMedicines
+  );
+
+  /*
+   * AUTOMATIC MEDICINE SYNC
+   *
+   * You do NOT need to modify Medicines.jsx.
+   *
+   * The Digital Twin checks the same localStorage
+   * key every 500ms.
+   *
+   * Therefore:
+   *
+   * Add medicine     → automatically appears
+   * Delete medicine  → automatically disappears
+   * Edit medicine    → automatically updates
+   * Take medicine    → automatically updates
+   */
+
+  useEffect(() => {
+    let previousData =
+      localStorage.getItem(STORAGE_KEY);
+
+    const checkForChanges = () => {
+      const currentData =
+        localStorage.getItem(STORAGE_KEY);
+
+      if (currentData !== previousData) {
+        previousData = currentData;
+
+        setMedicines(loadMedicines());
+      }
+    };
+
+    const interval = setInterval(
+      checkForChanges,
+      500
+    );
+
+    /*
+     * Also detect changes from another browser tab.
+     */
+
+    const handleStorageChange = (event) => {
+      if (event.key === STORAGE_KEY) {
+        previousData = event.newValue;
+
+        setMedicines(loadMedicines());
+      }
+    };
+
+    window.addEventListener(
+      "storage",
+      handleStorageChange
+    );
+
+    return () => {
+      clearInterval(interval);
+
+      window.removeEventListener(
+        "storage",
+        handleStorageChange
+      );
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#08111F] text-white">
 
-      <main className="max-w-[1400px] mx-auto px-8 py-12">
+      <main className="max-w-[1500px] mx-auto px-6 md:px-8 py-8">
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
-        <section className="mb-12">
+        <section className="mb-7">
 
-          <p className="text-cyan-400 text-sm font-medium mb-3">
-            DIGITAL TWIN
+          <p className="text-cyan-400 text-sm font-medium tracking-wide mb-2">
+            DIGITAL HEALTH MODEL
           </p>
 
-          <h1 className="text-5xl font-bold tracking-tight">
-            Your medication twin
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+            Digital Twin
           </h1>
 
-          <p className="text-lg text-slate-400 mt-4 max-w-3xl">
-            A live representation of your medication schedule,
-            adherence, and treatment patterns.
+          <p className="text-slate-400 text-lg mt-3 max-w-4xl">
+            A live virtual model of your dispenser,
+            mirrored from your medicines and dose history.
           </p>
 
         </section>
 
 
-        {/* STATUS */}
+        {/* =================================================
+            DISPENSER STATUS
+        ================================================= */}
 
-        <section
-          className="
-            rounded-2xl
-            border
-            border-cyan-400/30
-            bg-cyan-400/5
-            p-8
-            mb-8
-          "
-        >
+        <section className="rounded-3xl border border-white/10 bg-[#0D1B30] p-6 md:p-7 mb-7">
 
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
 
-            <div className="flex items-center gap-5">
+            {/* DEVICE */}
 
-              <div
-                className="
-                  w-16
-                  h-16
-                  rounded-2xl
-                  bg-cyan-400/10
-                  flex
-                  items-center
-                  justify-center
-                "
-              >
+            <div className="flex items-center gap-4">
 
-                <HeartPulse
-                  size={32}
-                  className="text-cyan-400"
-                />
-
-              </div>
+              <div className="w-4 h-4 rounded-full bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]" />
 
               <div>
 
-                <p className="text-sm text-slate-500 uppercase tracking-wider">
-                  Twin status
-                </p>
-
-                <h2 className="text-2xl font-bold mt-1">
-                  Synchronized
+                <h2 className="text-xl font-semibold">
+                  DoseTwin Dispenser
                 </h2>
 
-                <p className="text-slate-400 mt-1">
-                  Medication data is up to date.
+                <p className="text-sm text-slate-500 mt-1">
+                  DT-100 · DT100-8842-KJ
                 </p>
 
               </div>
@@ -88,11 +245,33 @@ function DigitalTwin() {
             </div>
 
 
-            <div className="flex items-center gap-2 text-emerald-400">
+            {/* DEVICE INFORMATION */}
 
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+            <div className="flex flex-wrap gap-7">
 
-              LIVE
+              <DeviceMetric
+                icon={<Wifi size={18} />}
+                label="Network"
+                value="Home-5G"
+              />
+
+              <DeviceMetric
+                icon={<BatteryMedium size={18} />}
+                label="Battery"
+                value="78%"
+              />
+
+              <DeviceMetric
+                icon={<RefreshCw size={18} />}
+                label="Last sync"
+                value="2 min ago"
+              />
+
+              <DeviceMetric
+                icon={<Cpu size={18} />}
+                label="Firmware"
+                value="v2.4.1"
+              />
 
             </div>
 
@@ -101,440 +280,288 @@ function DigitalTwin() {
         </section>
 
 
-        {/* STATS */}
+        {/* =================================================
+            COMPARTMENTS
+        ================================================= */}
 
-        <section
-          className="
-            grid
-            grid-cols-1
-            sm:grid-cols-2
-            xl:grid-cols-4
-            gap-6
-            mb-8
-          "
-        >
+        <section className="rounded-3xl border border-white/10 bg-[#0D1B30] p-6 md:p-7 mb-7">
 
-          {/* ADHERENCE */}
+          <div className="mb-6">
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/5
-              p-7
-            "
-          >
+            <h2 className="text-xl font-semibold">
+              Compartments
+            </h2>
 
-            <div
-              className="
-                w-12
-                h-12
-                rounded-xl
-                bg-cyan-400/10
-                flex
-                items-center
-                justify-center
-                mb-6
-              "
-            >
+            <p className="text-sm text-slate-500 mt-1">
+              Each slot mirrors a medicine from your
+              Medicines page.
+            </p>
 
-              <TrendingUp
-                size={23}
+          </div>
+
+
+          {/* =================================================
+              NO MEDICINES
+          ================================================= */}
+
+          {medicines.length === 0 ? (
+
+            <div className="py-16 text-center">
+
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-cyan-400/10 flex items-center justify-center mb-5">
+
+                <Pill
+                  size={30}
+                  className="text-cyan-400"
+                />
+
+              </div>
+
+              <h3 className="text-xl font-semibold">
+                No medicines in your dispenser
+              </h3>
+
+              <p className="text-slate-500 mt-2">
+                Add a medicine from the Medicines page
+                to see it here.
+              </p>
+
+            </div>
+
+          ) : (
+
+            /* =================================================
+               MEDICINE COMPARTMENTS
+            ================================================= */
+
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+
+              {medicines.map(
+                (medicine, index) => (
+                  <Compartment
+                    key={
+                      medicine.id ?? index
+                    }
+                    medicine={medicine}
+                    index={index}
+                  />
+                )
+              )}
+
+            </div>
+
+          )}
+
+        </section>
+
+
+        {/* =================================================
+            WEEKLY ADHERENCE + SYNC LOG
+        ================================================= */}
+
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-7">
+
+
+          {/* =================================================
+              WEEKLY ADHERENCE
+          ================================================= */}
+
+          <div className="rounded-3xl border border-white/10 bg-[#0D1B30] p-6">
+
+            <div className="flex items-center gap-3 mb-1">
+
+              <Activity
+                size={20}
                 className="text-cyan-400"
               />
 
+              <h2 className="text-xl font-semibold">
+                Weekly Adherence
+              </h2>
+
             </div>
 
-            <p className="text-slate-400">
-              Medication adherence
+            <p className="text-sm text-slate-500 mb-6">
+              Doses taken vs. scheduled, last 7 days
             </p>
 
-            <h2 className="text-4xl font-bold mt-2">
-              92%
-            </h2>
 
-            <p className="text-sm text-emerald-400 mt-2">
-              +4.2% this week
-            </p>
+            <div className="h-[300px] w-full">
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <AreaChart data={weeklyData}>
+
+                  <defs>
+
+                    <linearGradient
+                      id="adherenceGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+
+                      <stop
+                        offset="0%"
+                        stopColor="#2DD4BF"
+                        stopOpacity={0.28}
+                      />
+
+                      <stop
+                        offset="100%"
+                        stopColor="#2DD4BF"
+                        stopOpacity={0.02}
+                      />
+
+                    </linearGradient>
+
+                  </defs>
+
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255,255,255,0.06)"
+                  />
+
+
+                  <XAxis
+                    dataKey="day"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{
+                      fill: "#64748B",
+                      fontSize: 13,
+                    }}
+                  />
+
+
+                  <YAxis
+                    domain={[0, 100]}
+                    axisLine={false}
+                    tickLine={false}
+                    ticks={[
+                      0,
+                      25,
+                      50,
+                      75,
+                      100,
+                    ]}
+                    tick={{
+                      fill: "#64748B",
+                      fontSize: 13,
+                    }}
+                  />
+
+
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor:
+                        "#0B1728",
+
+                      border:
+                        "1px solid rgba(255,255,255,0.1)",
+
+                      borderRadius: "12px",
+
+                      color: "#fff",
+                    }}
+
+                    formatter={(value) => [
+                      `${value}%`,
+                      "Adherence",
+                    ]}
+                  />
+
+
+                  <Area
+                    type="monotone"
+                    dataKey="adherence"
+                    stroke="#2DD4BF"
+                    strokeWidth={3}
+                    fill="url(#adherenceGradient)"
+                  />
+
+                </AreaChart>
+
+              </ResponsiveContainer>
+
+            </div>
 
           </div>
 
 
-          {/* DOSES */}
+          {/* =================================================
+              SYNC LOG
+          ================================================= */}
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/5
-              p-7
-            "
-          >
+          <div className="rounded-3xl border border-white/10 bg-[#0D1B30] p-6">
 
-            <div
-              className="
-                w-12
-                h-12
-                rounded-xl
-                bg-purple-400/10
-                flex
-                items-center
-                justify-center
-                mb-6
-              "
-            >
+            <div className="flex items-center gap-3 mb-1">
 
-              <Pill
-                size={23}
-                className="text-purple-400"
+              <History
+                size={20}
+                className="text-slate-400"
               />
+
+              <h2 className="text-xl font-semibold">
+                Dispense & sync log
+              </h2>
 
             </div>
 
-            <p className="text-slate-400">
-              Doses today
-            </p>
 
-            <h2 className="text-4xl font-bold mt-2">
-              3 / 3
-            </h2>
+            <div className="space-y-3 mt-6">
 
-            <p className="text-sm text-emerald-400 mt-2">
-              All doses completed
-            </p>
-
-          </div>
-
-
-          {/* NEXT DOSE */}
-
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/5
-              p-7
-            "
-          >
-
-            <div
-              className="
-                w-12
-                h-12
-                rounded-xl
-                bg-orange-400/10
-                flex
-                items-center
-                justify-center
-                mb-6
-              "
-            >
-
-              <Clock3
-                size={23}
-                className="text-orange-400"
-              />
+              {syncLog.map(
+                (item, index) => (
+                  <LogItem
+                    key={index}
+                    item={item}
+                  />
+                )
+              )}
 
             </div>
-
-            <p className="text-slate-400">
-              Next dose
-            </p>
-
-            <h2 className="text-3xl font-bold mt-2">
-              Completed
-            </h2>
-
-            <p className="text-sm text-slate-500 mt-2">
-              No doses remaining
-            </p>
-
-          </div>
-
-
-          {/* SAFETY */}
-
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/5
-              p-7
-            "
-          >
-
-            <div
-              className="
-                w-12
-                h-12
-                rounded-xl
-                bg-emerald-400/10
-                flex
-                items-center
-                justify-center
-                mb-6
-              "
-            >
-
-              <ShieldCheck
-                size={23}
-                className="text-emerald-400"
-              />
-
-            </div>
-
-            <p className="text-slate-400">
-              Twin health status
-            </p>
-
-            <h2 className="text-3xl font-bold mt-2">
-              Stable
-            </h2>
-
-            <p className="text-sm text-emerald-400 mt-2">
-              No alerts detected
-            </p>
 
           </div>
 
         </section>
 
 
-        {/* LOWER CONTENT */}
+        {/* =================================================
+            RECENT DOSE ACTIVITY
+        ================================================= */}
 
-        <section
-          className="
-            grid
-            grid-cols-1
-            lg:grid-cols-2
-            gap-6
-          "
-        >
+        <section className="rounded-3xl border border-white/10 bg-[#0D1B30] p-6 mb-8">
 
-          {/* TWIN MODEL */}
+          <div className="flex items-center gap-3 mb-6">
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/5
-              p-8
-            "
-          >
+            <History
+              size={20}
+              className="text-slate-400"
+            />
 
-            <div className="flex items-center gap-4 mb-8">
-
-              <div
-                className="
-                  w-12
-                  h-12
-                  rounded-xl
-                  bg-cyan-400/10
-                  flex
-                  items-center
-                  justify-center
-                "
-              >
-
-                <Activity
-                  size={23}
-                  className="text-cyan-400"
-                />
-
-              </div>
-
-              <div>
-
-                <h2 className="text-2xl font-semibold">
-                  Twin activity
-                </h2>
-
-                <p className="text-slate-500">
-                  Current medication state
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="space-y-5">
-
-              <div
-                className="
-                  flex
-                  items-center
-                  justify-between
-                  p-4
-                  rounded-xl
-                  bg-white/5
-                "
-              >
-
-                <span className="text-slate-400">
-                  Medication sync
-                </span>
-
-                <span className="text-emerald-400 font-medium">
-                  Active
-                </span>
-
-              </div>
-
-
-              <div
-                className="
-                  flex
-                  items-center
-                  justify-between
-                  p-4
-                  rounded-xl
-                  bg-white/5
-                "
-              >
-
-                <span className="text-slate-400">
-                  Adherence monitoring
-                </span>
-
-                <span className="text-emerald-400 font-medium">
-                  Active
-                </span>
-
-              </div>
-
-
-              <div
-                className="
-                  flex
-                  items-center
-                  justify-between
-                  p-4
-                  rounded-xl
-                  bg-white/5
-                "
-              >
-
-                <span className="text-slate-400">
-                  Schedule monitoring
-                </span>
-
-                <span className="text-emerald-400 font-medium">
-                  Active
-                </span>
-
-              </div>
-
-
-              <div
-                className="
-                  flex
-                  items-center
-                  justify-between
-                  p-4
-                  rounded-xl
-                  bg-white/5
-                "
-              >
-
-                <span className="text-slate-400">
-                  Alert status
-                </span>
-
-                <span className="text-cyan-400 font-medium">
-                  Clear
-                </span>
-
-              </div>
-
-            </div>
+            <h2 className="text-xl font-semibold">
+              Recent dose activity
+            </h2>
 
           </div>
 
 
-          {/* INSIGHT */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
-          <div
-            className="
-              rounded-2xl
-              border
-              border-cyan-400/30
-              bg-cyan-400/5
-              p-8
-            "
-          >
-
-            <div className="flex items-center gap-4 mb-8">
-
-              <div
-                className="
-                  w-12
-                  h-12
-                  rounded-xl
-                  bg-cyan-400/10
-                  flex
-                  items-center
-                  justify-center
-                "
-              >
-
-                <HeartPulse
-                  size={23}
-                  className="text-cyan-400"
+            {recentActivity.map(
+              (item, index) => (
+                <LogItem
+                  key={index}
+                  item={item}
                 />
-
-              </div>
-
-              <div>
-
-                <h2 className="text-2xl font-semibold">
-                  Digital Twin insight
-                </h2>
-
-                <p className="text-slate-500">
-                  Medication pattern analysis
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <p className="text-slate-300 leading-7">
-
-              Your current medication pattern
-              indicates strong adherence. Your
-              medication twin is synchronized with
-              the latest schedule information.
-
-            </p>
-
-
-            <div
-              className="
-                mt-7
-                rounded-xl
-                border
-                border-white/10
-                bg-black/10
-                p-5
-              "
-            >
-
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">
-                Current recommendation
-              </p>
-
-              <p className="text-emerald-400 font-medium">
-                Continue following your current medication schedule.
-              </p>
-
-            </div>
+              )
+            )}
 
           </div>
 
@@ -545,5 +572,251 @@ function DigitalTwin() {
     </div>
   );
 }
+
+
+/* =========================================================
+   DEVICE METRIC
+========================================================= */
+
+function DeviceMetric({
+  icon,
+  label,
+  value,
+}) {
+  return (
+    <div className="flex items-center gap-3">
+
+      <div className="text-slate-500">
+        {icon}
+      </div>
+
+      <div>
+
+        <p className="text-xs text-slate-500">
+          {label}
+        </p>
+
+        <p className="text-sm text-slate-300 font-medium">
+          {value}
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   MEDICINE COMPARTMENT
+========================================================= */
+
+function Compartment({
+  medicine,
+  index,
+}) {
+
+  /*
+   * Try to use a stock percentage if one exists.
+   *
+   * If the current Medicines page does not have
+   * stock information yet, the compartment starts
+   * visually full.
+   */
+
+  const percentage =
+    medicine.remainingPercentage ??
+    medicine.stockPercentage ??
+    medicine.percentage ??
+    100;
+
+  const numericPercentage =
+    Number(percentage);
+
+  const safePercentage =
+    Math.max(
+      8,
+      Math.min(
+        100,
+        Number.isFinite(
+          numericPercentage
+        )
+          ? numericPercentage
+          : 100
+      )
+    );
+
+  const warning =
+    safePercentage <= 20;
+
+
+  return (
+    <div
+      className={`rounded-2xl border p-4 text-center transition ${
+        warning
+          ? "border-orange-400/20 bg-[#101E33]"
+          : "border-white/5 bg-[#101E33]"
+      }`}
+    >
+
+      {/* SLOT */}
+
+      <p className="text-xs text-slate-500 font-medium tracking-wide mb-4">
+        SLOT {index + 1}
+      </p>
+
+
+      {/* MEDICINE LEVEL */}
+
+      <div className="relative h-28 w-12 mx-auto mb-4 rounded-full border border-white/10 bg-[#17253A] overflow-hidden">
+
+        <div
+          className={`absolute bottom-0 left-0 right-0 rounded-full transition-all duration-700 ${
+            warning
+              ? "bg-gradient-to-t from-orange-500 to-red-400"
+              : "bg-gradient-to-t from-teal-400 to-cyan-300"
+          }`}
+          style={{
+            height: `${safePercentage}%`,
+          }}
+        />
+
+      </div>
+
+
+      {/* MEDICINE NAME */}
+
+      <h3 className="font-semibold text-sm leading-tight min-h-[40px] flex items-center justify-center">
+        {medicine.name}
+      </h3>
+
+
+      {/* DOSAGE */}
+
+      <p className="text-xs text-slate-500 mt-1">
+        {medicine.dosage ||
+          "Dose not specified"}
+      </p>
+
+
+      {/* SCHEDULE / TIME */}
+
+      <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-slate-400">
+
+        <Clock3 size={13} />
+
+        <span>
+          {medicine.time ||
+            medicine.schedule ||
+            "Schedule not set"}
+        </span>
+
+      </div>
+
+
+      {/* INSTRUCTIONS */}
+
+      {medicine.instructions && (
+        <p className="text-[11px] text-slate-600 mt-2 line-clamp-2">
+          {medicine.instructions}
+        </p>
+      )}
+
+
+      {/* STOCK STATUS */}
+
+      <p
+        className={`text-xs mt-2 ${
+          warning
+            ? "text-orange-400"
+            : "text-slate-500"
+        }`}
+      >
+
+        {warning && (
+          <AlertTriangle
+            size={12}
+            className="inline mr-1"
+          />
+        )}
+
+        {warning
+          ? "Low stock"
+          : "Stock synced"}
+
+      </p>
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   LOG ITEM
+========================================================= */
+
+function LogItem({ item }) {
+
+  let icon;
+  let iconClass;
+
+
+  if (item.type === "warning") {
+
+    icon = (
+      <AlertTriangle size={18} />
+    );
+
+    iconClass =
+      "bg-orange-400/10 text-orange-400";
+
+  } else if (
+    item.type === "sync"
+  ) {
+
+    icon = (
+      <RefreshCw size={18} />
+    );
+
+    iconClass =
+      "bg-slate-400/10 text-slate-400";
+
+  } else {
+
+    icon = (
+      <Link2 size={18} />
+    );
+
+    iconClass =
+      "bg-cyan-400/10 text-cyan-400";
+  }
+
+
+  return (
+    <div className="flex items-center gap-4 rounded-xl bg-[#111F34] px-4 py-3.5">
+
+      <div
+        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconClass}`}
+      >
+        {icon}
+      </div>
+
+
+      <div className="min-w-0">
+
+        <p className="text-sm font-medium text-slate-200 truncate">
+          {item.title}
+        </p>
+
+        <p className="text-xs text-slate-500 mt-1">
+          {item.time}
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
 
 export default DigitalTwin;
