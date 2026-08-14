@@ -15,9 +15,6 @@ import {
 const STORAGE_KEY = "dosetwin_medicines";
 const MEDICINE_EVENT = "dosetwin-medicines-updated";
 
-const DEFAULT_COMPARTMENT_CAPACITY = 20;
-
-
 /* =========================================================
    LOAD MEDICINES
 ========================================================= */
@@ -32,19 +29,12 @@ function loadMedicines() {
 
     const parsed = JSON.parse(stored);
 
-    return Array.isArray(parsed)
-      ? parsed
-      : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    console.error(
-      "Could not load medicines:",
-      error
-    );
-
+    console.error("Could not load medicines:", error);
     return [];
   }
 }
-
 
 /* =========================================================
    FORMAT TIME
@@ -55,10 +45,7 @@ function formatTime(time) {
     return "Not set";
   }
 
-  if (
-    time.includes("AM") ||
-    time.includes("PM")
-  ) {
+  if (time.includes("AM") || time.includes("PM")) {
     return time;
   }
 
@@ -75,17 +62,15 @@ function formatTime(time) {
     return time;
   }
 
-  const period =
-    hour >= 12 ? "PM" : "AM";
+  const period = hour >= 12 ? "PM" : "AM";
 
   hour = hour % 12 || 12;
 
   return `${hour}:${minute} ${period}`;
 }
 
-
 /* =========================================================
-   GET PRIMARY MEDICINE TIME
+   GET MEDICINE TIME
 ========================================================= */
 
 function getMedicineTime(medicine) {
@@ -94,29 +79,22 @@ function getMedicineTime(medicine) {
     medicine.doseTimes.length > 0 &&
     medicine.doseTimes[0]
   ) {
-    return formatTime(
-      medicine.doseTimes[0]
-    );
+    return formatTime(medicine.doseTimes[0]);
   }
 
   if (medicine.time) {
-    return formatTime(
-      medicine.time
-    );
+    return formatTime(medicine.time);
   }
 
   return "Not set";
 }
-
 
 /* =========================================================
    GET STOCK
 ========================================================= */
 
 function getStock(medicine) {
-  const stock = Number(
-    medicine.stock
-  );
+  const stock = Number(medicine.stock);
 
   if (Number.isNaN(stock)) {
     return 0;
@@ -125,35 +103,12 @@ function getStock(medicine) {
   return Math.max(0, stock);
 }
 
-
-/* =========================================================
-   GET COMPARTMENT CAPACITY
-========================================================= */
-
-function getCompartmentCapacity(medicine) {
-  const capacity = Number(
-    medicine.capacity
-  );
-
-  if (
-    !Number.isNaN(capacity) &&
-    capacity > 0
-  ) {
-    return capacity;
-  }
-
-  return DEFAULT_COMPARTMENT_CAPACITY;
-}
-
-
 /* =========================================================
    GET LOW STOCK LIMIT
 ========================================================= */
 
 function getLowStockLimit(medicine) {
-  const limit = Number(
-    medicine.lowStockAlert
-  );
+  const limit = Number(medicine.lowStockAlert);
 
   if (Number.isNaN(limit)) {
     return 5;
@@ -162,49 +117,141 @@ function getLowStockLimit(medicine) {
   return Math.max(0, limit);
 }
 
+/* =========================================================
+   GET CAPACITY
+=========================================================
+
+   We use the maximum stock value as the visual capacity.
+
+   Example:
+
+   stock = 10
+   capacity = 20
+
+   → compartment is 50% full.
+========================================================= */
+
+function getCapacity(medicine) {
+  const stock = getStock(medicine);
+
+  /*
+    If the medicine already has a capacity value,
+    use it.
+  */
+
+  if (Number(medicine.capacity) > 0) {
+    return Number(medicine.capacity);
+  }
+
+  /*
+    Otherwise create a sensible visual capacity.
+
+    This keeps the compartment from appearing full
+    simply because stock is a positive number.
+  */
+
+  if (stock <= 10) {
+    return 20;
+  }
+
+  if (stock <= 20) {
+    return 20;
+  }
+
+  if (stock <= 30) {
+    return 30;
+  }
+
+  if (stock <= 50) {
+    return 50;
+  }
+
+  return Math.ceil(stock / 10) * 10;
+}
 
 /* =========================================================
-   LOW STOCK CHECK
+   LOW STOCK
 ========================================================= */
 
 function isLowStock(medicine) {
   const stock = getStock(medicine);
+  const limit = getLowStockLimit(medicine);
 
-  const lowStockLimit =
-    getLowStockLimit(
-      medicine
-    );
-
-  return stock <= lowStockLimit;
+  return stock <= limit;
 }
-
 
 /* =========================================================
-   GET STOCK PERCENTAGE
+   ACCENT COLOR
+=========================================================
+
+   THIS IS THE IMPORTANT PART.
+
+   The value selected in:
+
+   Medicines → Edit → Accent color
+
+   is converted into Tailwind classes here.
 ========================================================= */
 
-function getStockPercentage(medicine) {
-  const stock =
-    getStock(medicine);
+function getAccentClasses(accentColor) {
+  const colors = {
+    Teal: {
+      fill:
+        "from-teal-300 via-teal-400 to-emerald-400",
+      glow:
+        "shadow-[0_0_25px_rgba(45,212,191,0.18)]",
+      bar: "bg-teal-400",
+      icon: "text-teal-400",
+    },
 
-  const capacity =
-    getCompartmentCapacity(
-      medicine
-    );
+    Cyan: {
+      fill:
+        "from-cyan-300 via-cyan-400 to-cyan-500",
+      glow:
+        "shadow-[0_0_25px_rgba(34,211,238,0.18)]",
+      bar: "bg-cyan-400",
+      icon: "text-cyan-400",
+    },
 
-  if (capacity <= 0) {
-    return 0;
-  }
+    Purple: {
+      fill:
+        "from-purple-300 via-purple-400 to-violet-500",
+      glow:
+        "shadow-[0_0_25px_rgba(168,85,247,0.18)]",
+      bar: "bg-purple-400",
+      icon: "text-purple-400",
+    },
 
-  return Math.min(
-    100,
-    Math.max(
-      0,
-      (stock / capacity) * 100
-    )
-  );
+    Orange: {
+      fill:
+        "from-orange-300 via-orange-400 to-amber-500",
+      glow:
+        "shadow-[0_0_25px_rgba(251,146,60,0.18)]",
+      bar: "bg-orange-400",
+      icon: "text-orange-400",
+    },
+
+    Green: {
+      fill:
+        "from-green-300 via-green-400 to-emerald-500",
+      glow:
+        "shadow-[0_0_25px_rgba(74,222,128,0.18)]",
+      bar: "bg-green-400",
+      icon: "text-green-400",
+    },
+
+    Red: {
+      fill:
+        "from-red-300 via-red-400 to-rose-500",
+      glow:
+        "shadow-[0_0_25px_rgba(248,113,113,0.18)]",
+      bar: "bg-red-400",
+      icon: "text-red-400",
+    },
+  };
+
+  return colors[accentColor] || colors.Teal;
 }
-
 
 /* =========================================================
    MAIN COMPONENT
@@ -217,20 +264,14 @@ function DigitalTwin() {
   const [lastSync, setLastSync] =
     useState("Just now");
 
-
   /* =======================================================
      AUTOMATIC MEDICINE SYNC
   ======================================================= */
 
   useEffect(() => {
     const syncMedicines = () => {
-      setMedicines(
-        loadMedicines()
-      );
-
-      setLastSync(
-        "Just now"
-      );
+      setMedicines(loadMedicines());
+      setLastSync("Just now");
     };
 
     window.addEventListener(
@@ -258,9 +299,8 @@ function DigitalTwin() {
     };
   }, []);
 
-
   /* =======================================================
-     DEVICE INFORMATION
+     DEVICE
   ======================================================= */
 
   const device = {
@@ -271,19 +311,16 @@ function DigitalTwin() {
     firmware: "v2.4.1",
   };
 
-
   /* =======================================================
      LOW STOCK MEDICINES
   ======================================================= */
 
   const lowStockMedicines =
     useMemo(() => {
-      return medicines.filter(
-        (medicine) =>
-          isLowStock(medicine)
+      return medicines.filter((medicine) =>
+        isLowStock(medicine)
       );
     }, [medicines]);
-
 
   /* =======================================================
      RECENT ACTIVITY
@@ -291,32 +328,23 @@ function DigitalTwin() {
 
   const recentActivity =
     useMemo(() => {
-      return medicines
-        .slice(0, 4)
-        .map((medicine) => ({
+      return medicines.slice(0, 4).map(
+        (medicine) => ({
           name: medicine.name,
           taken: medicine.taken,
-          time: getMedicineTime(
-            medicine
-          ),
-        }));
+          time: getMedicineTime(medicine),
+        })
+      );
     }, [medicines]);
-
 
   /* =======================================================
      MANUAL SYNC
   ======================================================= */
 
   const handleSync = () => {
-    setMedicines(
-      loadMedicines()
-    );
-
-    setLastSync(
-      "Just now"
-    );
+    setMedicines(loadMedicines());
+    setLastSync("Just now");
   };
-
 
   /* =======================================================
      RENDER
@@ -326,7 +354,6 @@ function DigitalTwin() {
     <div className="min-h-screen bg-[#08111F] text-white">
 
       <main className="max-w-[1400px] mx-auto px-6 md:px-8 py-10">
-
 
         {/* =================================================
             PAGE HEADER
@@ -354,9 +381,6 @@ function DigitalTwin() {
 
             </div>
 
-
-            {/* SYNC BUTTON */}
-
             <button
               onClick={handleSync}
               className="
@@ -375,11 +399,8 @@ function DigitalTwin() {
                 transition
               "
             >
-
               <RefreshCw size={17} />
-
               Sync now
-
             </button>
 
           </div>
@@ -427,7 +448,6 @@ function DigitalTwin() {
                   justify-center
                 "
               >
-
                 <span
                   className="
                     w-4
@@ -437,9 +457,7 @@ function DigitalTwin() {
                     shadow-[0_0_18px_rgba(34,211,238,0.8)]
                   "
                 />
-
               </div>
-
 
               <div>
 
@@ -590,14 +608,11 @@ function DigitalTwin() {
                   justify-center
                 "
               >
-
                 <AlertTriangle
                   size={22}
                   className="text-orange-400"
                 />
-
               </div>
-
 
               <div className="flex-1">
 
@@ -613,16 +628,13 @@ function DigitalTwin() {
                   need attention.
                 </p>
 
-
                 <div className="flex flex-wrap gap-2 mt-4">
 
                   {lowStockMedicines.map(
                     (medicine) => {
 
                       const stock =
-                        getStock(
-                          medicine
-                        );
+                        getStock(medicine);
 
                       return (
                         <span
@@ -741,28 +753,55 @@ function DigitalTwin() {
                 (medicine, index) => {
 
                   const stock =
-                    getStock(
-                      medicine
-                    );
+                    getStock(medicine);
 
                   const capacity =
-                    getCompartmentCapacity(
-                      medicine
-                    );
+                    getCapacity(medicine);
 
                   const lowStock =
-                    isLowStock(
-                      medicine
-                    );
+                    isLowStock(medicine);
 
                   const lowStockLimit =
-                    getLowStockLimit(
-                      medicine
-                    );
+                    getLowStockLimit(medicine);
+
+                  /*
+                    ========================================
+                    STOCK PERCENTAGE
+                    ========================================
+
+                    This determines the HEIGHT of the
+                    medicine inside the compartment.
+
+                    Example:
+
+                    10 / 20 = 50%
+
+                    5 / 20 = 25%
+
+                    20 / 20 = 100%
+                  */
 
                   const stockPercentage =
-                    getStockPercentage(
-                      medicine
+                    capacity > 0
+                      ? Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            (stock / capacity) * 100
+                          )
+                        )
+                      : 0;
+
+
+                  /*
+                    ========================================
+                    ACCENT COLOR
+                    ========================================
+                  */
+
+                  const accent =
+                    getAccentClasses(
+                      medicine.accentColor
                     );
 
 
@@ -788,6 +827,10 @@ function DigitalTwin() {
                       `}
                     >
 
+                      {/* =================================
+                          SLOT
+                      ================================= */}
+
                       <div className="text-center">
 
                         <p className="text-xs font-medium text-slate-500 tracking-wider">
@@ -795,37 +838,32 @@ function DigitalTwin() {
                         </p>
 
 
-                        {/* =================================================
-                            THIN + LONG COMPARTMENT
-                        ================================================= */}
+                        {/* =================================
+                            COMPARTMENT
+
+                            IMPORTANT:
+
+                            The outer dark container is
+                            ALWAYS full height.
+
+                            The colored medicine fill
+                            changes height based on stock.
+                        ================================= */}
 
                         <div className="h-36 flex items-end justify-center">
 
                           <div
                             className="
                               relative
-                              w-[30px]
-                              h-[140px]
+                              w-[42px]
+                              h-32
                               rounded-full
-                              overflow-hidden
+                              bg-[#091321]
                               border
                               border-white/10
-                              bg-[#0A1526]
-                              shadow-inner
+                              overflow-hidden
                             "
                           >
-
-                            {/* EMPTY COMPARTMENT */}
-
-                            <div
-                              className="
-                                absolute
-                                inset-0
-                                rounded-full
-                                bg-[#0A1526]
-                              "
-                            />
-
 
                             {/* MEDICINE LEVEL */}
 
@@ -836,21 +874,11 @@ function DigitalTwin() {
                                 left-0
                                 right-0
                                 rounded-full
+                                bg-gradient-to-t
+                                ${accent.fill}
+                                ${accent.glow}
                                 transition-all
-                                duration-500
-                                ${
-                                  lowStock
-                                    ? `
-                                      bg-gradient-to-t
-                                      from-orange-500
-                                      to-orange-300
-                                    `
-                                    : `
-                                      bg-gradient-to-t
-                                      from-teal-400
-                                      to-cyan-300
-                                    `
-                                }
+                                duration-700
                               `}
                               style={{
                                 height: `${stockPercentage}%`,
@@ -862,9 +890,11 @@ function DigitalTwin() {
                         </div>
 
 
-                        {/* NAME */}
+                        {/* =================================
+                            NAME
+                        ================================= */}
 
-                        <h3 className="text-lg font-semibold truncate mt-3">
+                        <h3 className="text-lg font-semibold truncate">
                           {medicine.name}
                         </h3>
 
@@ -873,7 +903,9 @@ function DigitalTwin() {
                         </p>
 
 
-                        {/* TIME */}
+                        {/* =================================
+                            TIME
+                        ================================= */}
 
                         <div className="flex items-center justify-center gap-2 mt-4">
 
@@ -883,15 +915,15 @@ function DigitalTwin() {
                           />
 
                           <span className="text-sm text-slate-400">
-                            {getMedicineTime(
-                              medicine
-                            )}
+                            {getMedicineTime(medicine)}
                           </span>
 
                         </div>
 
 
-                        {/* INSTRUCTIONS */}
+                        {/* =================================
+                            INSTRUCTIONS
+                        ================================= */}
 
                         {(medicine.instructions ||
                           medicine.notes) && (
@@ -912,9 +944,18 @@ function DigitalTwin() {
                         )}
 
 
-                        {/* STOCK */}
+                        {/* =================================
+                            STOCK
+                        ================================= */}
 
-                        <div className="mt-5 pt-4 border-t border-white/10">
+                        <div
+                          className="
+                            mt-5
+                            pt-4
+                            border-t
+                            border-white/10
+                          "
+                        >
 
                           <div className="flex items-center justify-between gap-2">
 
@@ -945,14 +986,14 @@ function DigitalTwin() {
                             ) : (
 
                               <span
-                                className="
+                                className={`
                                   flex
                                   items-center
                                   gap-1.5
                                   text-xs
                                   font-medium
-                                  text-emerald-400
-                                "
+                                  ${accent.icon}
+                                `}
                               >
 
                                 <CheckCircle2 size={13} />
@@ -983,10 +1024,11 @@ function DigitalTwin() {
                                 h-full
                                 rounded-full
                                 transition-all
+                                duration-700
                                 ${
                                   lowStock
                                     ? "bg-orange-400"
-                                    : "bg-cyan-400"
+                                    : accent.bar
                                 }
                               `}
                               style={{
@@ -1023,8 +1065,7 @@ function DigitalTwin() {
 
                             <span className="text-[11px] text-slate-600">
 
-                              Capacity{" "}
-                              {capacity}
+                              Capacity {capacity}
 
                             </span>
 
@@ -1077,7 +1118,7 @@ function DigitalTwin() {
 
 
         {/* =================================================
-            WEEKLY / LOG
+            WEEKLY + DISPENSE LOG
         ================================================= */}
 
         <section
@@ -1130,37 +1171,35 @@ function DigitalTwin() {
                 88,
                 72,
                 90,
-              ].map(
-                (value, index) => (
+              ].map((value, index) => (
+
+                <div
+                  key={index}
+                  className="
+                    flex
+                    flex-1
+                    h-full
+                    items-end
+                  "
+                >
 
                   <div
-                    key={index}
                     className="
-                      flex
-                      flex-1
-                      h-full
-                      items-end
+                      w-full
+                      rounded-t-xl
+                      bg-gradient-to-t
+                      from-cyan-500/30
+                      to-cyan-400
+                      transition-all
                     "
-                  >
+                    style={{
+                      height: `${value}%`,
+                    }}
+                  />
 
-                    <div
-                      className="
-                        w-full
-                        rounded-t-xl
-                        bg-gradient-to-t
-                        from-cyan-500/30
-                        to-cyan-400
-                        transition-all
-                      "
-                      style={{
-                        height: `${value}%`,
-                      }}
-                    />
+                </div>
 
-                  </div>
-
-                )
-              )}
+              ))}
 
             </div>
 
@@ -1351,81 +1390,77 @@ function DigitalTwin() {
               "
             >
 
-              {medicines
-                .slice(0, 4)
-                .map(
-                  (medicine) => (
+              {medicines.slice(0, 4).map(
+                (medicine) => (
+
+                  <div
+                    key={medicine.id}
+                    className="
+                      rounded-xl
+                      bg-white/[0.03]
+                      border
+                      border-white/5
+                      p-4
+                      flex
+                      items-center
+                      gap-4
+                    "
+                  >
 
                     <div
-                      key={medicine.id}
-                      className="
-                        rounded-xl
-                        bg-white/[0.03]
-                        border
-                        border-white/5
-                        p-4
+                      className={`
+                        w-10
+                        h-10
+                        rounded-lg
                         flex
                         items-center
-                        gap-4
-                      "
+                        justify-center
+                        ${
+                          medicine.taken
+                            ? "bg-cyan-400/10"
+                            : "bg-orange-400/10"
+                        }
+                      `}
                     >
 
-                      <div
-                        className={`
-                          w-10
-                          h-10
-                          rounded-lg
-                          flex
-                          items-center
-                          justify-center
-                          ${
-                            medicine.taken
-                              ? "bg-cyan-400/10"
-                              : "bg-orange-400/10"
-                          }
-                        `}
-                      >
+                      {medicine.taken ? (
 
-                        {medicine.taken ? (
+                        <Pill
+                          size={18}
+                          className="text-cyan-400"
+                        />
 
-                          <Pill
-                            size={18}
-                            className="text-cyan-400"
-                          />
+                      ) : (
 
-                        ) : (
+                        <AlertTriangle
+                          size={18}
+                          className="text-orange-400"
+                        />
 
-                          <AlertTriangle
-                            size={18}
-                            className="text-orange-400"
-                          />
-
-                        )}
-
-                      </div>
-
-
-                      <div>
-
-                        <p className="font-medium">
-                          {medicine.name}{" "}
-                          {medicine.taken
-                            ? "taken"
-                            : "pending"}
-                        </p>
-
-                        <p className="text-xs text-slate-500 mt-1">
-                          {getMedicineTime(
-                            medicine
-                          )}
-                        </p>
-
-                      </div>
+                      )}
 
                     </div>
 
-                  )
-                )}
+
+                    <div>
+
+                      <p className="font-medium">
+                        {medicine.name}{" "}
+                        {medicine.taken
+                          ? "taken"
+                          : "pending"}
+                      </p>
+
+                      <p className="text-xs text-slate-500 mt-1">
+                        {getMedicineTime(medicine)}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                )
+              )}
 
             </div>
 
