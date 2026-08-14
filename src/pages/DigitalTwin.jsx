@@ -15,6 +15,8 @@ import {
 const STORAGE_KEY = "dosetwin_medicines";
 const MEDICINE_EVENT = "dosetwin-medicines-updated";
 
+const DEFAULT_COMPARTMENT_CAPACITY = 20;
+
 
 /* =========================================================
    LOAD MEDICINES
@@ -53,22 +55,12 @@ function formatTime(time) {
     return "Not set";
   }
 
-  /*
-    Already formatted:
-    "8:00 AM"
-  */
-
   if (
     time.includes("AM") ||
     time.includes("PM")
   ) {
     return time;
   }
-
-  /*
-    Convert:
-    "08:00" → "8:00 AM"
-  */
 
   const parts = time.split(":");
 
@@ -93,7 +85,7 @@ function formatTime(time) {
 
 
 /* =========================================================
-   GET PRIMARY TIME
+   GET PRIMARY MEDICINE TIME
 ========================================================= */
 
 function getMedicineTime(medicine) {
@@ -135,6 +127,26 @@ function getStock(medicine) {
 
 
 /* =========================================================
+   GET COMPARTMENT CAPACITY
+========================================================= */
+
+function getCompartmentCapacity(medicine) {
+  const capacity = Number(
+    medicine.capacity
+  );
+
+  if (
+    !Number.isNaN(capacity) &&
+    capacity > 0
+  ) {
+    return capacity;
+  }
+
+  return DEFAULT_COMPARTMENT_CAPACITY;
+}
+
+
+/* =========================================================
    GET LOW STOCK LIMIT
 ========================================================= */
 
@@ -156,9 +168,7 @@ function getLowStockLimit(medicine) {
 ========================================================= */
 
 function isLowStock(medicine) {
-  const stock = getStock(
-    medicine
-  );
+  const stock = getStock(medicine);
 
   const lowStockLimit =
     getLowStockLimit(
@@ -166,6 +176,33 @@ function isLowStock(medicine) {
     );
 
   return stock <= lowStockLimit;
+}
+
+
+/* =========================================================
+   GET STOCK PERCENTAGE
+========================================================= */
+
+function getStockPercentage(medicine) {
+  const stock =
+    getStock(medicine);
+
+  const capacity =
+    getCompartmentCapacity(
+      medicine
+    );
+
+  if (capacity <= 0) {
+    return 0;
+  }
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      (stock / capacity) * 100
+    )
+  );
 }
 
 
@@ -196,37 +233,17 @@ function DigitalTwin() {
       );
     };
 
-
-    /*
-      Same browser tab.
-
-      Medicines.jsx dispatches:
-
-      dosetwin-medicines-updated
-    */
-
     window.addEventListener(
       MEDICINE_EVENT,
       syncMedicines
     );
-
-
-    /*
-      Different browser tabs.
-    */
 
     window.addEventListener(
       "storage",
       syncMedicines
     );
 
-
-    /*
-      Also refresh once when component mounts.
-    */
-
     syncMedicines();
-
 
     return () => {
       window.removeEventListener(
@@ -256,7 +273,7 @@ function DigitalTwin() {
 
 
   /* =======================================================
-     CALCULATE LOW STOCK MEDICINES
+     LOW STOCK MEDICINES
   ======================================================= */
 
   const lowStockMedicines =
@@ -338,6 +355,8 @@ function DigitalTwin() {
             </div>
 
 
+            {/* SYNC BUTTON */}
+
             <button
               onClick={handleSync}
               className="
@@ -395,8 +414,6 @@ function DigitalTwin() {
             "
           >
 
-            {/* DEVICE */}
-
             <div className="flex items-center gap-4">
 
               <div
@@ -438,8 +455,6 @@ function DigitalTwin() {
 
             </div>
 
-
-            {/* DEVICE STATS */}
 
             <div
               className="
@@ -730,6 +745,11 @@ function DigitalTwin() {
                       medicine
                     );
 
+                  const capacity =
+                    getCompartmentCapacity(
+                      medicine
+                    );
+
                   const lowStock =
                     isLowStock(
                       medicine
@@ -741,23 +761,9 @@ function DigitalTwin() {
                     );
 
                   const stockPercentage =
-                    lowStockLimit === 0
-                      ? stock > 0
-                        ? 100
-                        : 0
-                      : Math.min(
-                          100,
-                          Math.max(
-                            0,
-                            (stock /
-                              Math.max(
-                                lowStockLimit *
-                                  4,
-                                1
-                              )) *
-                              100
-                          )
-                        );
+                    getStockPercentage(
+                      medicine
+                    );
 
 
                   return (
@@ -782,8 +788,6 @@ function DigitalTwin() {
                       `}
                     >
 
-                      {/* SLOT */}
-
                       <div className="text-center">
 
                         <p className="text-xs font-medium text-slate-500 tracking-wider">
@@ -791,40 +795,76 @@ function DigitalTwin() {
                         </p>
 
 
-                        {/* PILL VISUAL */}
+                        {/* =================================================
+                            THIN + LONG COMPARTMENT
+                        ================================================= */}
 
-                        <div className="h-36 flex items-center justify-center">
+                        <div className="h-36 flex items-end justify-center">
 
                           <div
-                            className={`
-                              w-14
-                              h-32
+                            className="
+                              relative
+                              w-[30px]
+                              h-[140px]
                               rounded-full
-                              transition
-                              ${
-                                lowStock
-                                  ? `
-                                    bg-gradient-to-b
-                                    from-orange-400
-                                    to-orange-500
-                                    shadow-[0_0_25px_rgba(251,146,60,0.15)]
-                                  `
-                                  : `
-                                    bg-gradient-to-b
-                                    from-cyan-300
-                                    to-teal-400
-                                    shadow-[0_0_25px_rgba(45,212,191,0.12)]
-                                  `
-                              }
-                            `}
-                          />
+                              overflow-hidden
+                              border
+                              border-white/10
+                              bg-[#0A1526]
+                              shadow-inner
+                            "
+                          >
+
+                            {/* EMPTY COMPARTMENT */}
+
+                            <div
+                              className="
+                                absolute
+                                inset-0
+                                rounded-full
+                                bg-[#0A1526]
+                              "
+                            />
+
+
+                            {/* MEDICINE LEVEL */}
+
+                            <div
+                              className={`
+                                absolute
+                                bottom-0
+                                left-0
+                                right-0
+                                rounded-full
+                                transition-all
+                                duration-500
+                                ${
+                                  lowStock
+                                    ? `
+                                      bg-gradient-to-t
+                                      from-orange-500
+                                      to-orange-300
+                                    `
+                                    : `
+                                      bg-gradient-to-t
+                                      from-teal-400
+                                      to-cyan-300
+                                    `
+                                }
+                              `}
+                              style={{
+                                height: `${stockPercentage}%`,
+                              }}
+                            />
+
+                          </div>
 
                         </div>
 
 
                         {/* NAME */}
 
-                        <h3 className="text-lg font-semibold truncate">
+                        <h3 className="text-lg font-semibold truncate mt-3">
                           {medicine.name}
                         </h3>
 
@@ -872,9 +912,7 @@ function DigitalTwin() {
                         )}
 
 
-                        {/* =================================================
-                            STOCK STATUS — IMPORTANT FIX
-                        ================================================= */}
+                        {/* STOCK */}
 
                         <div className="mt-5 pt-4 border-t border-white/10">
 
@@ -985,15 +1023,15 @@ function DigitalTwin() {
 
                             <span className="text-[11px] text-slate-600">
 
-                              Alert at{" "}
-                              {lowStockLimit}
+                              Capacity{" "}
+                              {capacity}
 
                             </span>
 
                           </div>
 
 
-                          {/* EXPLICIT LOW STOCK MESSAGE */}
+                          {/* LOW STOCK MESSAGE */}
 
                           {lowStock && (
 
@@ -1081,8 +1119,6 @@ function DigitalTwin() {
               Doses taken vs. scheduled, last 7 days
             </p>
 
-
-            {/* SIMPLE VISUAL */}
 
             <div className="h-56 flex items-end justify-between gap-3">
 
