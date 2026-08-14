@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   Edit3,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 
 const STORAGE_KEY = "dosetwin_medicines";
+const MEDICINE_EVENT = "dosetwin-medicines-updated";
 
 /* =========================================================
    DEFAULT DATA
@@ -26,8 +29,19 @@ const defaultMedicines = [
     schedule: "Morning",
     time: "8:00 AM",
     doseTimes: ["08:00"],
+
+    /* PRESCRIPTION */
+
+    prescriptionStartDate: "",
+    prescriptionEndDate: "",
+    prescribedQuantity: 30,
+
+    /* CURRENT INVENTORY */
+
     stock: 30,
-    lowStockAlert: 5,
+
+    lowStockAlert: 3,
+
     purpose: "",
     status: "Active",
     accentColor: "Teal",
@@ -35,6 +49,7 @@ const defaultMedicines = [
     instructions: "Take after breakfast",
     taken: true,
   },
+
   {
     id: 2,
     name: "Omega 3",
@@ -44,8 +59,15 @@ const defaultMedicines = [
     schedule: "Afternoon",
     time: "1:00 PM",
     doseTimes: ["13:00"],
+
+    prescriptionStartDate: "",
+    prescriptionEndDate: "",
+    prescribedQuantity: 20,
+
     stock: 20,
-    lowStockAlert: 5,
+
+    lowStockAlert: 3,
+
     purpose: "",
     status: "Active",
     accentColor: "Purple",
@@ -53,6 +75,7 @@ const defaultMedicines = [
     instructions: "Take with food",
     taken: true,
   },
+
   {
     id: 3,
     name: "Vitamin D",
@@ -62,8 +85,15 @@ const defaultMedicines = [
     schedule: "Evening",
     time: "7:30 PM",
     doseTimes: ["19:30"],
+
+    prescriptionStartDate: "",
+    prescriptionEndDate: "",
+    prescribedQuantity: 30,
+
     stock: 30,
-    lowStockAlert: 5,
+
+    lowStockAlert: 3,
+
     purpose: "",
     status: "Active",
     accentColor: "Orange",
@@ -72,7 +102,6 @@ const defaultMedicines = [
     taken: true,
   },
 ];
-
 
 /* =========================================================
    LOAD MEDICINES
@@ -106,7 +135,6 @@ function loadMedicines() {
   }
 }
 
-
 /* =========================================================
    SAVE MEDICINES
 ========================================================= */
@@ -117,19 +145,10 @@ function saveMedicines(medicines) {
     JSON.stringify(medicines)
   );
 
-  /*
-    Custom event.
-
-    This allows Dashboard, Analytics and Digital Twin
-    to immediately know that medicines changed,
-    even when they are inside the same browser tab.
-  */
-
   window.dispatchEvent(
-    new Event("dosetwin-medicines-updated")
+    new Event(MEDICINE_EVENT)
   );
 }
-
 
 /* =========================================================
    EMPTY FORM
@@ -140,24 +159,132 @@ const emptyForm = {
   dosage: "",
   form: "Tablet",
   frequency: "Once daily",
+
   doseTimes: [""],
+
+  prescriptionStartDate: "",
+  prescriptionEndDate: "",
+  prescribedQuantity: "",
+
   stock: "",
-  lowStockAlert: "5",
+  lowStockAlert: "3",
+
   purpose: "",
   status: "Active",
   accentColor: "Teal",
   notes: "",
 };
 
+/* =========================================================
+   FREQUENCY → DAILY DOSE COUNT
+========================================================= */
+
+function getDailyDoseCount(frequency) {
+  switch (frequency) {
+    case "Once daily":
+      return 1;
+
+    case "Twice daily":
+      return 2;
+
+    case "Three times daily":
+      return 3;
+
+    case "Four times daily":
+      return 4;
+
+    case "Every other day":
+      return 0.5;
+
+    case "Weekly":
+      return 1 / 7;
+
+    case "As needed":
+      return 0;
+
+    default:
+      return 1;
+  }
+}
+
+/* =========================================================
+   DAYS BETWEEN DATES
+========================================================= */
+
+function getDaysBetween(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return 0;
+  }
+
+  const start = new Date(
+    `${startDate}T00:00:00`
+  );
+
+  const end = new Date(
+    `${endDate}T00:00:00`
+  );
+
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime())
+  ) {
+    return 0;
+  }
+
+  const difference =
+    end.getTime() - start.getTime();
+
+  return Math.max(
+    0,
+    Math.ceil(
+      difference /
+        (1000 * 60 * 60 * 24)
+    ) + 1
+  );
+}
+
+/* =========================================================
+   DAYS REMAINING
+========================================================= */
+
+function getPrescriptionDaysRemaining(
+  endDate
+) {
+  if (!endDate) {
+    return null;
+  }
+
+  const today = new Date();
+
+  today.setHours(0, 0, 0, 0);
+
+  const end = new Date(
+    `${endDate}T00:00:00`
+  );
+
+  if (Number.isNaN(end.getTime())) {
+    return null;
+  }
+
+  const difference =
+    end.getTime() - today.getTime();
+
+  return Math.max(
+    0,
+    Math.ceil(
+      difference /
+        (1000 * 60 * 60 * 24)
+    )
+  );
+}
 
 /* =========================================================
    MAIN COMPONENT
 ========================================================= */
 
 function Medicines() {
-  const [medicines, setMedicines] = useState(
-    loadMedicines
-  );
+  const [medicines, setMedicines] =
+    useState(loadMedicines);
 
   const [showModal, setShowModal] =
     useState(false);
@@ -167,7 +294,6 @@ function Medicines() {
 
   const [form, setForm] =
     useState(emptyForm);
-
 
   /* =======================================================
      AUTOMATIC SYNC
@@ -184,7 +310,7 @@ function Medicines() {
     );
 
     window.addEventListener(
-      "dosetwin-medicines-updated",
+      MEDICINE_EVENT,
       syncMedicines
     );
 
@@ -195,27 +321,28 @@ function Medicines() {
       );
 
       window.removeEventListener(
-        "dosetwin-medicines-updated",
+        MEDICINE_EVENT,
         syncMedicines
       );
     };
   }, []);
 
-
   /* =======================================================
-     FORM HANDLERS
+     FORM HANDLER
   ======================================================= */
 
-  const updateForm = (field, value) => {
+  const updateForm = (
+    field,
+    value
+  ) => {
     setForm((previous) => ({
       ...previous,
       [field]: value,
     }));
   };
 
-
   /* =======================================================
-     OPEN ADD MODAL
+     OPEN ADD
   ======================================================= */
 
   const openAddModal = () => {
@@ -229,36 +356,73 @@ function Medicines() {
     setShowModal(true);
   };
 
-
   /* =======================================================
-     OPEN EDIT MODAL
+     OPEN EDIT
   ======================================================= */
 
-  const openEditModal = (medicine) => {
+  const openEditModal = (
+    medicine
+  ) => {
     setEditingId(medicine.id);
 
     setForm({
       name: medicine.name || "",
-      dosage: medicine.dosage || "",
-      form: medicine.form || "Tablet",
+
+      dosage:
+        medicine.dosage || "",
+
+      form:
+        medicine.form || "Tablet",
+
       frequency:
-        medicine.frequency || "Once daily",
+        medicine.frequency ||
+        "Once daily",
+
       doseTimes:
         medicine.doseTimes?.length
           ? medicine.doseTimes
           : [""],
+
+      prescriptionStartDate:
+        medicine.prescriptionStartDate ||
+        "",
+
+      prescriptionEndDate:
+        medicine.prescriptionEndDate ||
+        "",
+
+      prescribedQuantity:
+        medicine.prescribedQuantity !==
+        undefined
+          ? String(
+              medicine.prescribedQuantity
+            )
+          : "",
+
       stock:
-        medicine.stock !== undefined
+        medicine.stock !==
+        undefined
           ? String(medicine.stock)
           : "",
+
       lowStockAlert:
-        medicine.lowStockAlert !== undefined
-          ? String(medicine.lowStockAlert)
-          : "5",
-      purpose: medicine.purpose || "",
-      status: medicine.status || "Active",
+        medicine.lowStockAlert !==
+        undefined
+          ? String(
+              medicine.lowStockAlert
+            )
+          : "3",
+
+      purpose:
+        medicine.purpose || "",
+
+      status:
+        medicine.status || "Active",
+
       accentColor:
-        medicine.accentColor || "Teal",
+        medicine.accentColor ||
+        "Teal",
+
       notes:
         medicine.notes ||
         medicine.instructions ||
@@ -268,20 +432,20 @@ function Medicines() {
     setShowModal(true);
   };
 
-
   /* =======================================================
      CLOSE MODAL
   ======================================================= */
 
   const closeModal = () => {
     setShowModal(false);
+
     setEditingId(null);
+
     setForm({
       ...emptyForm,
       doseTimes: [""],
     });
   };
-
 
   /* =======================================================
      ADD TIME SLOT
@@ -290,6 +454,7 @@ function Medicines() {
   const addTimeSlot = () => {
     setForm((previous) => ({
       ...previous,
+
       doseTimes: [
         ...previous.doseTimes,
         "",
@@ -297,19 +462,22 @@ function Medicines() {
     }));
   };
 
-
   /* =======================================================
      REMOVE TIME SLOT
   ======================================================= */
 
-  const removeTimeSlot = (index) => {
+  const removeTimeSlot = (
+    index
+  ) => {
     setForm((previous) => {
-      const updated = previous.doseTimes.filter(
-        (_, i) => i !== index
-      );
+      const updated =
+        previous.doseTimes.filter(
+          (_, i) => i !== index
+        );
 
       return {
         ...previous,
+
         doseTimes:
           updated.length > 0
             ? updated
@@ -318,9 +486,8 @@ function Medicines() {
     });
   };
 
-
   /* =======================================================
-     UPDATE TIME SLOT
+     UPDATE TIME
   ======================================================= */
 
   const updateTimeSlot = (
@@ -341,13 +508,14 @@ function Medicines() {
     });
   };
 
-
   /* =======================================================
-     CONVERT TIME
+     FORMAT TIME
   ======================================================= */
 
   const formatTime = (time) => {
-    if (!time) return "";
+    if (!time) {
+      return "";
+    }
 
     const [hours, minutes] =
       time.split(":");
@@ -362,48 +530,67 @@ function Medicines() {
     return `${hour}:${minutes} ${period}`;
   };
 
-
   /* =======================================================
-     DETERMINE SCHEDULE
+     GET SCHEDULE
   ======================================================= */
 
-  const getSchedule = (time) => {
-    if (!time) return "Morning";
+  const getSchedule = (
+    time
+  ) => {
+    if (!time) {
+      return "Morning";
+    }
 
     const hour = Number(
       time.split(":")[0]
     );
 
-    if (hour >= 5 && hour < 12) {
+    if (
+      hour >= 5 &&
+      hour < 12
+    ) {
       return "Morning";
     }
 
-    if (hour >= 12 && hour < 17) {
+    if (
+      hour >= 12 &&
+      hour < 17
+    ) {
       return "Afternoon";
     }
 
-    if (hour >= 17 && hour < 21) {
+    if (
+      hour >= 17 &&
+      hour < 21
+    ) {
       return "Evening";
     }
 
     return "Night";
   };
 
-
   /* =======================================================
      SAVE MEDICINE
   ======================================================= */
 
-  const handleSubmit = (event) => {
+  const handleSubmit = (
+    event
+  ) => {
     event.preventDefault();
 
     if (!form.name.trim()) {
-      alert("Please enter a medicine name.");
+      alert(
+        "Please enter a medicine name."
+      );
+
       return;
     }
 
     if (!form.dosage.trim()) {
-      alert("Please enter the dosage.");
+      alert(
+        "Please enter the dosage."
+      );
+
       return;
     }
 
@@ -415,16 +602,48 @@ function Medicines() {
     const firstTime =
       validTimes[0] || "";
 
+    /* -----------------------------------------------
+       PRESCRIPTION VALIDATION
+    ------------------------------------------------ */
+
+    if (
+      form.prescriptionStartDate &&
+      form.prescriptionEndDate
+    ) {
+      const start =
+        new Date(
+          `${form.prescriptionStartDate}T00:00:00`
+        );
+
+      const end =
+        new Date(
+          `${form.prescriptionEndDate}T00:00:00`
+        );
+
+      if (end < start) {
+        alert(
+          "Prescription end date cannot be before the start date."
+        );
+
+        return;
+      }
+    }
+
     const medicineData = {
-      name: form.name.trim(),
+      name:
+        form.name.trim(),
 
-      dosage: form.dosage.trim(),
+      dosage:
+        form.dosage.trim(),
 
-      form: form.form,
+      form:
+        form.form,
 
-      frequency: form.frequency,
+      frequency:
+        form.frequency,
 
-      doseTimes: validTimes,
+      doseTimes:
+        validTimes,
 
       schedule:
         getSchedule(firstTime),
@@ -432,16 +651,34 @@ function Medicines() {
       time:
         formatTime(firstTime),
 
+      /* PRESCRIPTION */
+
+      prescriptionStartDate:
+        form.prescriptionStartDate,
+
+      prescriptionEndDate:
+        form.prescriptionEndDate,
+
+      prescribedQuantity:
+        Number(
+          form.prescribedQuantity
+        ) || 0,
+
+      /* INVENTORY */
+
       stock:
         Number(form.stock) || 0,
 
       lowStockAlert:
-        Number(form.lowStockAlert) || 5,
+        Number(
+          form.lowStockAlert
+        ) || 3,
 
       purpose:
         form.purpose.trim(),
 
-      status: form.status,
+      status:
+        form.status,
 
       accentColor:
         form.accentColor,
@@ -453,8 +690,7 @@ function Medicines() {
         form.notes.trim(),
 
       /*
-        When editing, preserve taken status.
-        When adding, default to false.
+        Preserve taken state when editing.
       */
 
       taken:
@@ -467,9 +703,7 @@ function Medicines() {
           : false,
     };
 
-
     let updatedMedicines;
-
 
     /* =====================================================
        EDIT
@@ -479,7 +713,8 @@ function Medicines() {
       updatedMedicines =
         medicines.map(
           (medicine) =>
-            medicine.id === editingId
+            medicine.id ===
+            editingId
               ? {
                   ...medicine,
                   ...medicineData,
@@ -488,7 +723,6 @@ function Medicines() {
               : medicine
         );
     }
-
 
     /* =====================================================
        ADD
@@ -506,32 +740,41 @@ function Medicines() {
       ];
     }
 
+    setMedicines(
+      updatedMedicines
+    );
 
-    setMedicines(updatedMedicines);
-
-    saveMedicines(updatedMedicines);
+    saveMedicines(
+      updatedMedicines
+    );
 
     closeModal();
   };
-
 
   /* =======================================================
      DELETE
   ======================================================= */
 
-  const deleteMedicine = (id) => {
+  const deleteMedicine = (
+    id
+  ) => {
     const medicine =
       medicines.find(
-        (item) => item.id === id
+        (item) =>
+          item.id === id
       );
 
-    const confirmed = window.confirm(
-      `Delete ${
-        medicine?.name || "this medicine"
-      }?`
-    );
+    const confirmed =
+      window.confirm(
+        `Delete ${
+          medicine?.name ||
+          "this medicine"
+        }?`
+      );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     const updatedMedicines =
       medicines.filter(
@@ -539,33 +782,162 @@ function Medicines() {
           medicine.id !== id
       );
 
-    setMedicines(updatedMedicines);
+    setMedicines(
+      updatedMedicines
+    );
 
-    saveMedicines(updatedMedicines);
+    saveMedicines(
+      updatedMedicines
+    );
   };
-
 
   /* =======================================================
      TOGGLE TAKEN
   ======================================================= */
 
-  const toggleTaken = (id) => {
+  const toggleTaken = (
+    id
+  ) => {
     const updatedMedicines =
       medicines.map(
         (medicine) =>
           medicine.id === id
             ? {
                 ...medicine,
-                taken: !medicine.taken,
+                taken:
+                  !medicine.taken,
               }
             : medicine
       );
 
-    setMedicines(updatedMedicines);
+    setMedicines(
+      updatedMedicines
+    );
 
-    saveMedicines(updatedMedicines);
+    saveMedicines(
+      updatedMedicines
+    );
   };
 
+  /* =======================================================
+     MEDICINE STATUS
+  ======================================================= */
+
+  const getMedicineStatus = (
+    medicine
+  ) => {
+    const stock =
+      Number(
+        medicine.stock
+      ) || 0;
+
+    const lowStock =
+      Number(
+        medicine.lowStockAlert
+      ) || 3;
+
+    /*
+      Critical if stock is 3 or below.
+    */
+
+    if (stock <= 3) {
+      return {
+        type: "critical",
+        label: "Critical stock",
+      };
+    }
+
+    /*
+      If there is no prescription,
+      fall back to the basic stock threshold.
+    */
+
+    if (
+      !medicine.prescriptionEndDate ||
+      !medicine.prescribedQuantity
+    ) {
+      if (stock <= lowStock) {
+        return {
+          type: "attention",
+          label: "Low stock",
+        };
+      }
+
+      return {
+        type: "good",
+        label: "Stock sufficient",
+      };
+    }
+
+    const daysRemaining =
+      getPrescriptionDaysRemaining(
+        medicine.prescriptionEndDate
+      );
+
+    /*
+      Prescription has ended.
+    */
+
+    if (
+      daysRemaining === 0
+    ) {
+      return {
+        type: "completed",
+        label: "Prescription ended",
+      };
+    }
+
+    const dailyDose =
+      getDailyDoseCount(
+        medicine.frequency
+      );
+
+    /*
+      As-needed medicines cannot
+      calculate exact requirement.
+    */
+
+    if (dailyDose === 0) {
+      return {
+        type:
+          stock <= lowStock
+            ? "attention"
+            : "good",
+
+        label:
+          stock <= lowStock
+            ? "Low stock"
+            : "Stock sufficient",
+      };
+    }
+
+    const expectedRequired =
+      Math.ceil(
+        dailyDose *
+          daysRemaining
+      );
+
+    /*
+      Stock is not enough to finish
+      the remaining prescription.
+    */
+
+    if (
+      stock <
+      expectedRequired
+    ) {
+      return {
+        type: "attention",
+        label:
+          "Insufficient for prescription",
+      };
+    }
+
+    return {
+      type: "good",
+      label: "Stock sufficient",
+    };
+  };
 
   /* =======================================================
      STATISTICS
@@ -584,6 +956,22 @@ function Medicines() {
     totalMedicines -
     takenToday;
 
+  const criticalCount =
+    medicines.filter(
+      (medicine) =>
+        getMedicineStatus(
+          medicine
+        ).type === "critical"
+    ).length;
+
+  const attentionCount =
+    medicines.filter(
+      (medicine) =>
+        getMedicineStatus(
+          medicine
+        ).type ===
+        "attention"
+    ).length;
 
   /* =======================================================
      RENDER
@@ -613,17 +1001,17 @@ function Medicines() {
               </h1>
 
               <p className="text-lg text-slate-400 mt-4">
-                Manage your medications, schedules,
-                dosage information, and daily adherence.
+                Manage your medications,
+                prescriptions, schedules,
+                inventory, and adherence.
               </p>
 
             </div>
 
-
-            {/* ADD BUTTON */}
-
             <button
-              onClick={openAddModal}
+              onClick={
+                openAddModal
+              }
               className="
                 inline-flex
                 items-center
@@ -662,7 +1050,8 @@ function Medicines() {
             grid
             grid-cols-1
             md:grid-cols-3
-            gap-6
+            xl:grid-cols-5
+            gap-5
             mb-10
           "
         >
@@ -673,7 +1062,7 @@ function Medicines() {
               border
               border-white/10
               bg-white/5
-              p-7
+              p-6
             "
           >
 
@@ -694,7 +1083,7 @@ function Medicines() {
               border
               border-white/10
               bg-white/5
-              p-7
+              p-6
             "
           >
 
@@ -715,7 +1104,7 @@ function Medicines() {
               border
               border-white/10
               bg-white/5
-              p-7
+              p-6
             "
           >
 
@@ -725,6 +1114,48 @@ function Medicines() {
 
             <h2 className="text-5xl font-bold mt-3 text-orange-400">
               {remaining}
+            </h2>
+
+          </div>
+
+
+          <div
+            className="
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-6
+            "
+          >
+
+            <p className="text-slate-400">
+              Prescription alerts
+            </p>
+
+            <h2 className="text-5xl font-bold mt-3 text-orange-400">
+              {attentionCount}
+            </h2>
+
+          </div>
+
+
+          <div
+            className="
+              rounded-2xl
+              border
+              border-red-400/10
+              bg-red-400/5
+              p-6
+            "
+          >
+
+            <p className="text-slate-400">
+              Critical stock
+            </p>
+
+            <h2 className="text-5xl font-bold mt-3 text-red-400">
+              {criticalCount}
             </h2>
 
           </div>
@@ -747,7 +1178,8 @@ function Medicines() {
               </h2>
 
               <p className="text-slate-500 mt-1">
-                Active medications and schedules
+                Active medications,
+                prescriptions, and inventory
               </p>
 
             </div>
@@ -778,11 +1210,14 @@ function Medicines() {
               </h3>
 
               <p className="text-slate-500 mt-2 mb-6">
-                Add your first medicine to get started.
+                Add your first medicine
+                to get started.
               </p>
 
               <button
-                onClick={openAddModal}
+                onClick={
+                  openAddModal
+                }
                 className="
                   inline-flex
                   items-center
@@ -816,14 +1251,34 @@ function Medicines() {
                       medicine.stock
                     ) || 0;
 
-                  const lowStock =
+                  const status =
+                    getMedicineStatus(
+                      medicine
+                    );
+
+                  const daysRemaining =
+                    getPrescriptionDaysRemaining(
+                      medicine.prescriptionEndDate
+                    );
+
+                  const prescribedQuantity =
                     Number(
-                      medicine.lowStockAlert
-                    ) || 5;
+                      medicine.prescribedQuantity
+                    ) || 0;
 
-                  const isLowStock =
-                    stock <= lowStock;
-
+                  const prescriptionProgress =
+                    prescribedQuantity >
+                    0
+                      ? Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            (stock /
+                              prescribedQuantity) *
+                              100
+                          )
+                        )
+                      : 0;
 
                   return (
                     <div
@@ -993,6 +1448,114 @@ function Medicines() {
                       </div>
 
 
+                      {/* PRESCRIPTION */}
+
+                      <div
+                        className="
+                          mt-6
+                          rounded-xl
+                          border
+                          border-white/10
+                          bg-black/10
+                          p-4
+                        "
+                      >
+
+                        <div className="flex items-center gap-2 mb-4">
+
+                          <CalendarDays
+                            size={17}
+                            className="text-cyan-400"
+                          />
+
+                          <p className="text-sm font-medium">
+                            Prescription
+                          </p>
+
+                        </div>
+
+
+                        <div
+                          className="
+                            grid
+                            grid-cols-2
+                            gap-4
+                          "
+                        >
+
+                          <div>
+
+                            <p className="text-xs text-slate-500">
+                              Start
+                            </p>
+
+                            <p className="text-sm text-slate-300 mt-1">
+                              {medicine.prescriptionStartDate ||
+                                "Not set"}
+                            </p>
+
+                          </div>
+
+
+                          <div>
+
+                            <p className="text-xs text-slate-500">
+                              End
+                            </p>
+
+                            <p className="text-sm text-slate-300 mt-1">
+                              {medicine.prescriptionEndDate ||
+                                "Not set"}
+                            </p>
+
+                          </div>
+
+
+                          <div>
+
+                            <p className="text-xs text-slate-500">
+                              Prescribed
+                            </p>
+
+                            <p className="text-sm text-slate-300 mt-1">
+                              {prescribedQuantity
+                                ? `${prescribedQuantity} ${medicine.form === "Liquid" ? "units" : "doses"}`
+                                : "Not set"}
+                            </p>
+
+                          </div>
+
+
+                          <div>
+
+                            <p className="text-xs text-slate-500">
+                              Days left
+                            </p>
+
+                            <p className="text-sm text-slate-300 mt-1">
+
+                              {daysRemaining ===
+                              null
+                                ? "Not set"
+                                : daysRemaining ===
+                                  0
+                                ? "Ended"
+                                : `${daysRemaining} day${
+                                    daysRemaining ===
+                                    1
+                                      ? ""
+                                      : "s"
+                                  }`}
+
+                            </p>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+
                       {/* STOCK */}
 
                       <div className="mt-6">
@@ -1000,15 +1563,26 @@ function Medicines() {
                         <div className="flex items-center justify-between mb-2">
 
                           <p className="text-xs text-slate-500 uppercase tracking-wide">
-                            Stock
+                            Current stock
                           </p>
 
                           <span
-                            className={
-                              isLowStock
-                                ? "text-orange-400 text-sm"
-                                : "text-slate-400 text-sm"
-                            }
+                            className={`
+                              text-sm
+                              font-medium
+                              ${
+                                status.type ===
+                                "critical"
+                                  ? "text-red-400"
+                                  : status.type ===
+                                    "attention"
+                                  ? "text-orange-400"
+                                  : status.type ===
+                                    "completed"
+                                  ? "text-slate-400"
+                                  : "text-emerald-400"
+                              }
+                            `}
                           >
                             {stock} remaining
                           </span>
@@ -1024,33 +1598,92 @@ function Medicines() {
                               rounded-full
                               transition-all
                               ${
-                                isLowStock
+                                status.type ===
+                                "critical"
+                                  ? "bg-red-400"
+                                  : status.type ===
+                                    "attention"
                                   ? "bg-orange-400"
                                   : "bg-cyan-400"
                               }
                             `}
                             style={{
-                              width: `${Math.min(
-                                stock * 3.33,
-                                100
-                              )}%`,
+                              width: `${prescriptionProgress}%`,
                             }}
                           />
 
                         </div>
 
 
-                        {isLowStock && (
+                        {/* STATUS */}
 
-                          <div className="flex items-center gap-2 mt-3 text-orange-400 text-sm">
+                        <div className="mt-3">
 
-                            <AlertTriangle size={15} />
+                          {status.type ===
+                            "critical" && (
 
-                            Low stock
+                            <div className="flex items-center gap-2 text-red-400 text-sm">
 
-                          </div>
+                              <AlertTriangle
+                                size={15}
+                              />
 
-                        )}
+                              Critical stock —
+                              only {stock} remaining
+
+                            </div>
+
+                          )}
+
+
+                          {status.type ===
+                            "attention" && (
+
+                            <div className="flex items-center gap-2 text-orange-400 text-sm">
+
+                              <AlertTriangle
+                                size={15}
+                              />
+
+                              {status.label}
+
+                            </div>
+
+                          )}
+
+
+                          {status.type ===
+                            "good" && (
+
+                            <div className="flex items-center gap-2 text-emerald-400 text-sm">
+
+                              <CheckCircle2
+                                size={15}
+                              />
+
+                              {status.label}
+
+                            </div>
+
+                          )}
+
+
+                          {status.type ===
+                            "completed" && (
+
+                            <div className="flex items-center gap-2 text-slate-400 text-sm">
+
+                              <CalendarDays
+                                size={15}
+                              />
+
+                              Prescription ended
+
+                            </div>
+
+                          )}
+
+                        </div>
 
                       </div>
 
@@ -1079,12 +1712,18 @@ function Medicines() {
 
                           {medicine.taken ? (
                             <>
-                              <CheckCircle2 size={17} />
+                              <CheckCircle2
+                                size={17}
+                              />
+
                               Taken today
                             </>
                           ) : (
                             <>
-                              <Clock3 size={17} />
+                              <Clock3
+                                size={17}
+                              />
+
                               Upcoming
                             </>
                           )}
@@ -1133,7 +1772,7 @@ function Medicines() {
 
 
       {/* ===================================================
-          ADD / EDIT MEDICINE MODAL
+          ADD / EDIT MODAL
       =================================================== */}
 
       {showModal && (
@@ -1163,7 +1802,7 @@ function Medicines() {
           <div
             className="
               w-full
-              max-w-[620px]
+              max-w-[680px]
               max-h-[92vh]
               overflow-y-auto
               rounded-2xl
@@ -1174,7 +1813,7 @@ function Medicines() {
             "
           >
 
-            {/* MODAL HEADER */}
+            {/* HEADER */}
 
             <div
               className="
@@ -1192,14 +1831,25 @@ function Medicines() {
               "
             >
 
-              <h2 className="text-2xl font-semibold">
-                {editingId
-                  ? "Edit Medicine"
-                  : "Add Medicine"}
-              </h2>
+              <div>
+
+                <h2 className="text-2xl font-semibold">
+                  {editingId
+                    ? "Edit Medicine"
+                    : "Add Medicine"}
+                </h2>
+
+                <p className="text-sm text-slate-500 mt-1">
+                  Prescription and inventory
+                  information
+                </p>
+
+              </div>
 
               <button
-                onClick={closeModal}
+                onClick={
+                  closeModal
+                }
                 className="
                   w-9
                   h-9
@@ -1224,7 +1874,9 @@ function Medicines() {
             {/* FORM */}
 
             <form
-              onSubmit={handleSubmit}
+              onSubmit={
+                handleSubmit
+              }
               className="px-7 py-6"
             >
 
@@ -1260,7 +1912,6 @@ function Medicines() {
                       placeholder:text-slate-600
                       outline-none
                       focus:border-cyan-400/50
-                      transition
                     "
                   />
 
@@ -1282,7 +1933,7 @@ function Medicines() {
                         event.target.value
                       )
                     }
-                    placeholder="e.g. 500mg"
+                    placeholder="e.g. 500 mg"
                     className="
                       w-full
                       h-12
@@ -1295,7 +1946,6 @@ function Medicines() {
                       placeholder:text-slate-600
                       outline-none
                       focus:border-cyan-400/50
-                      transition
                     "
                   />
 
@@ -1315,7 +1965,9 @@ function Medicines() {
                   </label>
 
                   <select
-                    value={form.form}
+                    value={
+                      form.form
+                    }
                     onChange={(event) =>
                       updateForm(
                         "form",
@@ -1336,12 +1988,29 @@ function Medicines() {
                     "
                   >
 
-                    <option>Tablet</option>
-                    <option>Capsule</option>
-                    <option>Liquid</option>
-                    <option>Injection</option>
-                    <option>Powder</option>
-                    <option>Other</option>
+                    <option>
+                      Tablet
+                    </option>
+
+                    <option>
+                      Capsule
+                    </option>
+
+                    <option>
+                      Liquid
+                    </option>
+
+                    <option>
+                      Injection
+                    </option>
+
+                    <option>
+                      Powder
+                    </option>
+
+                    <option>
+                      Other
+                    </option>
 
                   </select>
 
@@ -1355,7 +2024,9 @@ function Medicines() {
                   </label>
 
                   <select
-                    value={form.frequency}
+                    value={
+                      form.frequency
+                    }
                     onChange={(event) =>
                       updateForm(
                         "frequency",
@@ -1376,13 +2047,33 @@ function Medicines() {
                     "
                   >
 
-                    <option>Once daily</option>
-                    <option>Twice daily</option>
-                    <option>Three times daily</option>
-                    <option>Four times daily</option>
-                    <option>Every other day</option>
-                    <option>Weekly</option>
-                    <option>As needed</option>
+                    <option>
+                      Once daily
+                    </option>
+
+                    <option>
+                      Twice daily
+                    </option>
+
+                    <option>
+                      Three times daily
+                    </option>
+
+                    <option>
+                      Four times daily
+                    </option>
+
+                    <option>
+                      Every other day
+                    </option>
+
+                    <option>
+                      Weekly
+                    </option>
+
+                    <option>
+                      As needed
+                    </option>
 
                   </select>
 
@@ -1399,11 +2090,13 @@ function Medicines() {
                   Dose times
                 </label>
 
-
                 <div className="space-y-3">
 
                   {form.doseTimes.map(
-                    (time, index) => (
+                    (
+                      time,
+                      index
+                    ) => (
 
                       <div
                         key={index}
@@ -1433,8 +2126,9 @@ function Medicines() {
                           "
                         />
 
-
-                        {form.doseTimes.length >
+                        {form
+                          .doseTimes
+                          .length >
                           1 && (
 
                           <button
@@ -1457,7 +2151,9 @@ function Medicines() {
                             "
                           >
 
-                            <X size={17} />
+                            <X
+                              size={17}
+                            />
 
                           </button>
 
@@ -1473,7 +2169,9 @@ function Medicines() {
 
                 <button
                   type="button"
-                  onClick={addTimeSlot}
+                  onClick={
+                    addTimeSlot
+                  }
                   className="
                     mt-3
                     inline-flex
@@ -1495,23 +2193,150 @@ function Medicines() {
               </div>
 
 
-              {/* STOCK */}
+              {/* =================================================
+                  PRESCRIPTION SECTION
+              ================================================= */}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+              <div
+                className="
+                  mt-7
+                  rounded-2xl
+                  border
+                  border-cyan-400/10
+                  bg-cyan-400/[0.03]
+                  p-5
+                "
+              >
 
-                <div>
+                <div className="flex items-center gap-3 mb-5">
+
+                  <div
+                    className="
+                      w-10
+                      h-10
+                      rounded-xl
+                      bg-cyan-400/10
+                      flex
+                      items-center
+                      justify-center
+                    "
+                  >
+
+                    <CalendarDays
+                      size={19}
+                      className="text-cyan-400"
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <h3 className="font-semibold">
+                      Prescription
+                    </h3>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      Used to calculate
+                      expected medication
+                      requirements.
+                    </p>
+
+                  </div>
+
+                </div>
+
+
+                {/* START + END */}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                  <div>
+
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Prescription start
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        form.prescriptionStartDate
+                      }
+                      onChange={(event) =>
+                        updateForm(
+                          "prescriptionStartDate",
+                          event.target.value
+                        )
+                      }
+                      className="
+                        w-full
+                        h-12
+                        px-4
+                        rounded-xl
+                        border
+                        border-white/10
+                        bg-[#111F32]
+                        text-white
+                        outline-none
+                        focus:border-cyan-400/50
+                      "
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Prescription end
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        form.prescriptionEndDate
+                      }
+                      onChange={(event) =>
+                        updateForm(
+                          "prescriptionEndDate",
+                          event.target.value
+                        )
+                      }
+                      className="
+                        w-full
+                        h-12
+                        px-4
+                        rounded-xl
+                        border
+                        border-white/10
+                        bg-[#111F32]
+                        text-white
+                        outline-none
+                        focus:border-cyan-400/50
+                      "
+                    />
+
+                  </div>
+
+                </div>
+
+
+                {/* PRESCRIBED QUANTITY */}
+
+                <div className="mt-5">
 
                   <label className="block text-sm text-slate-400 mb-2">
-                    Stock quantity
+                    Prescribed quantity
                   </label>
 
                   <input
                     type="number"
                     min="0"
-                    value={form.stock}
+                    value={
+                      form.prescribedQuantity
+                    }
                     onChange={(event) =>
                       updateForm(
-                        "stock",
+                        "prescribedQuantity",
                         event.target.value
                       )
                     }
@@ -1531,42 +2356,147 @@ function Medicines() {
                     "
                   />
 
+                  <p className="text-xs text-slate-600 mt-2">
+                    Total quantity prescribed
+                    for this prescription.
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              {/* =================================================
+                  INVENTORY
+              ================================================= */}
+
+              <div
+                className="
+                  mt-5
+                  rounded-2xl
+                  border
+                  border-white/10
+                  bg-white/[0.02]
+                  p-5
+                "
+              >
+
+                <div className="flex items-center gap-3 mb-5">
+
+                  <div
+                    className="
+                      w-10
+                      h-10
+                      rounded-xl
+                      bg-purple-400/10
+                      flex
+                      items-center
+                      justify-center
+                    "
+                  >
+
+                    <Pill
+                      size={19}
+                      className="text-purple-400"
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <h3 className="font-semibold">
+                      Current inventory
+                    </h3>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      How many doses you currently
+                      have available.
+                    </p>
+
+                  </div>
+
                 </div>
 
 
-                <div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                  <label className="block text-sm text-slate-400 mb-2">
-                    Low stock alert at
-                  </label>
+                  <div>
 
-                  <input
-                    type="number"
-                    min="0"
-                    value={
-                      form.lowStockAlert
-                    }
-                    onChange={(event) =>
-                      updateForm(
-                        "lowStockAlert",
-                        event.target.value
-                      )
-                    }
-                    placeholder="5"
-                    className="
-                      w-full
-                      h-12
-                      px-4
-                      rounded-xl
-                      border
-                      border-white/10
-                      bg-white/5
-                      text-white
-                      placeholder:text-slate-600
-                      outline-none
-                      focus:border-cyan-400/50
-                    "
-                  />
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Current stock
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={
+                        form.stock
+                      }
+                      onChange={(event) =>
+                        updateForm(
+                          "stock",
+                          event.target.value
+                        )
+                      }
+                      placeholder="e.g. 30"
+                      className="
+                        w-full
+                        h-12
+                        px-4
+                        rounded-xl
+                        border
+                        border-white/10
+                        bg-white/5
+                        text-white
+                        placeholder:text-slate-600
+                        outline-none
+                        focus:border-cyan-400/50
+                      "
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Critical stock threshold
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={
+                        form.lowStockAlert
+                      }
+                      onChange={(event) =>
+                        updateForm(
+                          "lowStockAlert",
+                          event.target.value
+                        )
+                      }
+                      placeholder="3"
+                      className="
+                        w-full
+                        h-12
+                        px-4
+                        rounded-xl
+                        border
+                        border-white/10
+                        bg-white/5
+                        text-white
+                        placeholder:text-slate-600
+                        outline-none
+                        focus:border-cyan-400/50
+                      "
+                    />
+
+                    <p className="text-xs text-slate-600 mt-2">
+                      Default critical threshold
+                      is 3 doses.
+                    </p>
+
+                  </div>
 
                 </div>
 
@@ -1583,7 +2513,9 @@ function Medicines() {
 
                 <input
                   type="text"
-                  value={form.purpose}
+                  value={
+                    form.purpose
+                  }
                   onChange={(event) =>
                     updateForm(
                       "purpose",
@@ -1620,7 +2552,9 @@ function Medicines() {
                   </label>
 
                   <select
-                    value={form.status}
+                    value={
+                      form.status
+                    }
                     onChange={(event) =>
                       updateForm(
                         "status",
@@ -1641,9 +2575,17 @@ function Medicines() {
                     "
                   >
 
-                    <option>Active</option>
-                    <option>Paused</option>
-                    <option>Completed</option>
+                    <option>
+                      Active
+                    </option>
+
+                    <option>
+                      Paused
+                    </option>
+
+                    <option>
+                      Completed
+                    </option>
 
                   </select>
 
@@ -1680,12 +2622,29 @@ function Medicines() {
                     "
                   >
 
-                    <option>Teal</option>
-                    <option>Cyan</option>
-                    <option>Purple</option>
-                    <option>Orange</option>
-                    <option>Green</option>
-                    <option>Red</option>
+                    <option>
+                      Teal
+                    </option>
+
+                    <option>
+                      Cyan
+                    </option>
+
+                    <option>
+                      Purple
+                    </option>
+
+                    <option>
+                      Orange
+                    </option>
+
+                    <option>
+                      Green
+                    </option>
+
+                    <option>
+                      Red
+                    </option>
 
                   </select>
 
@@ -1703,7 +2662,9 @@ function Medicines() {
                 </label>
 
                 <textarea
-                  value={form.notes}
+                  value={
+                    form.notes
+                  }
                   onChange={(event) =>
                     updateForm(
                       "notes",
@@ -1748,7 +2709,9 @@ function Medicines() {
 
                 <button
                   type="button"
-                  onClick={closeModal}
+                  onClick={
+                    closeModal
+                  }
                   className="
                     px-6
                     py-3
