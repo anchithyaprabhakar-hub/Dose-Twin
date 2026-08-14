@@ -1,114 +1,89 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import {
-  Bell,
+  ArrowRight,
   CheckCircle2,
   Clock3,
   HeartPulse,
   Pill,
   ShieldCheck,
   TrendingUp,
-  UserRound,
-  ArrowRight,
-  BarChart3,
-  MessageCircle,
 } from "lucide-react";
+
 import { Link } from "react-router-dom";
 
 const STORAGE_KEY = "dosetwin_medicines";
 
-const defaultMedicines = [
-  {
-    id: 1,
-    name: "Metformin",
-    dosage: "500 mg",
-    schedule: "Morning",
-    time: "8:00 AM",
-    instructions: "Take after breakfast",
-    taken: true,
-  },
-  {
-    id: 2,
-    name: "Omega 3",
-    dosage: "1000 mg",
-    schedule: "Afternoon",
-    time: "1:00 PM",
-    instructions: "Take with food",
-    taken: true,
-  },
-  {
-    id: 3,
-    name: "Vitamin D",
-    dosage: "1000 IU",
-    schedule: "Evening",
-    time: "7:30 PM",
-    instructions: "Take after dinner",
-    taken: false,
-  },
-];
+/* =========================================================
+   LOAD MEDICINES
+========================================================= */
 
 function loadMedicines() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
 
     if (!stored) {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(defaultMedicines)
-      );
-
-      return defaultMedicines;
+      return [];
     }
 
     const parsed = JSON.parse(stored);
 
-    return Array.isArray(parsed)
-      ? parsed
-      : defaultMedicines;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.error("Could not load medicines:", error);
-    return defaultMedicines;
+    return [];
   }
 }
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
 
 function Dashboard() {
   const [medicines, setMedicines] = useState(loadMedicines);
 
-  /* ================= LOAD MEDICINES ================= */
+  /* =======================================================
+     SYNC WITH MEDICINES PAGE
+  ======================================================= */
 
   useEffect(() => {
-    setMedicines(loadMedicines());
-  }, []);
-
-  /* ================= REFRESH LOCAL STORAGE ================= */
-
-  useEffect(() => {
-    const handleStorageChange = () => {
+    const syncMedicines = () => {
       setMedicines(loadMedicines());
     };
 
+    // Other browser tabs/windows
+    window.addEventListener("storage", syncMedicines);
+
+    // Same-tab custom event
     window.addEventListener(
-      "storage",
-      handleStorageChange
+      "dosetwin-medicines-updated",
+      syncMedicines
     );
+
+    // Safety refresh
+    const interval = setInterval(syncMedicines, 500);
 
     return () => {
       window.removeEventListener(
         "storage",
-        handleStorageChange
+        syncMedicines
       );
+
+      window.removeEventListener(
+        "dosetwin-medicines-updated",
+        syncMedicines
+      );
+
+      clearInterval(interval);
     };
   }, []);
 
-  /* ================= DATE / GREETING ================= */
+  /* =======================================================
+     DATE / GREETING
+  ======================================================= */
 
   const now = new Date();
   const hour = now.getHours();
-
-  const formattedDate = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
 
   let greeting = "GOOD MORNING";
 
@@ -120,7 +95,18 @@ function Dashboard() {
     greeting = "GOOD NIGHT";
   }
 
-  /* ================= MEDICATION CALCULATIONS ================= */
+  const formattedDate = now.toLocaleDateString(
+    "en-US",
+    {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    }
+  );
+
+  /* =======================================================
+     MEDICATION CALCULATIONS
+  ======================================================= */
 
   const totalDoses = medicines.length;
 
@@ -138,20 +124,35 @@ function Dashboard() {
           (takenCount / totalDoses) * 100
         );
 
-  const nextDose = medicines.find(
-    (medicine) => !medicine.taken
-  );
+  /* =======================================================
+     NEXT DOSE
+  ======================================================= */
 
-  /* ================= TOGGLE MEDICINE ================= */
+  const nextDose = useMemo(() => {
+    const upcoming = medicines.filter(
+      (medicine) => !medicine.taken
+    );
+
+    if (upcoming.length === 0) {
+      return null;
+    }
+
+    return upcoming[0];
+  }, [medicines]);
+
+  /* =======================================================
+     TOGGLE DOSE
+  ======================================================= */
 
   const toggleTaken = (id) => {
-    const updated = medicines.map((medicine) =>
-      medicine.id === id
-        ? {
-            ...medicine,
-            taken: !medicine.taken,
-          }
-        : medicine
+    const updated = medicines.map(
+      (medicine) =>
+        medicine.id === id
+          ? {
+              ...medicine,
+              taken: !medicine.taken,
+            }
+          : medicine
     );
 
     setMedicines(updated);
@@ -160,131 +161,24 @@ function Dashboard() {
       STORAGE_KEY,
       JSON.stringify(updated)
     );
+
+    window.dispatchEvent(
+      new Event("dosetwin-medicines-updated")
+    );
   };
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <div className="min-h-screen bg-[#08111F] text-white">
 
-      {/* =====================================================
-          NAVBAR
-      ===================================================== */}
+      <main className="max-w-[1400px] mx-auto px-8 py-12">
 
-      <nav className="border-b border-white/10 bg-[#0A1724]/90 backdrop-blur-xl">
-
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-
-          {/* LOGO */}
-
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-3"
-          >
-
-            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-cyan-400 to-red-400" />
-
-            <div>
-              <h1 className="text-xl font-bold">
-                DoseTwin
-              </h1>
-
-              <p className="text-xs text-slate-500">
-                Smart Medication Platform
-              </p>
-            </div>
-
-          </Link>
-
-          {/* NAVIGATION */}
-
-          <div className="flex items-center gap-3">
-
-            {/* MEDICINES */}
-
-            <Link
-              to="/medicines"
-              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-cyan-400 text-[#08111F] font-semibold hover:bg-cyan-300 transition"
-            >
-              <Pill size={17} />
-              Medicines
-            </Link>
-
-            {/* ANALYTICS */}
-
-            <Link
-              to="/analytics"
-              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/30 transition"
-            >
-              <BarChart3 size={17} />
-              Analytics
-            </Link>
-
-            {/* AI CHAT */}
-
-            <Link
-              to="/aichat"
-              className="hidden lg:flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/30 transition"
-            >
-              <MessageCircle size={17} />
-              AI Chat
-            </Link>
-
-            {/* NOTIFICATION */}
-
-            <button
-              className="relative w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center"
-            >
-
-              <Bell
-                size={21}
-                className="text-slate-300"
-              />
-
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-400" />
-
-            </button>
-
-            {/* USER */}
-
-            <div className="flex items-center gap-3">
-
-              <div className="w-11 h-11 rounded-full bg-cyan-400 flex items-center justify-center">
-
-                <UserRound
-                  size={22}
-                  className="text-[#08111F]"
-                />
-
-              </div>
-
-              <div className="hidden md:block">
-
-                <p className="font-semibold">
-                  Welcome
-                </p>
-
-                <p className="text-sm text-slate-500">
-                  Patient
-                </p>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </nav>
-
-      {/* =====================================================
-          MAIN
-      ===================================================== */}
-
-      <main className="max-w-7xl mx-auto px-6 py-12">
-
-        {/* ===================================================
+        {/* =================================================
             HERO
-        =================================================== */}
+        ================================================= */}
 
         <section className="mb-12">
 
@@ -292,11 +186,11 @@ function Dashboard() {
             {greeting}
           </p>
 
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
+          <h1 className="text-5xl font-bold tracking-tight">
             Your medication twin is ready.
-          </h2>
+          </h1>
 
-          <p className="text-lg text-slate-400 mt-4">
+          <p className="text-lg text-slate-400 mt-4 max-w-3xl">
             Track your medication schedule,
             adherence, and digital twin insights
             from one place.
@@ -304,29 +198,52 @@ function Dashboard() {
 
         </section>
 
-        {/* ===================================================
-            STAT CARDS
-        =================================================== */}
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
+        {/* =================================================
+            STAT CARDS
+        ================================================= */}
+
+        <section
+          className="
+            grid
+            grid-cols-1
+            sm:grid-cols-2
+            xl:grid-cols-4
+            gap-6
+            mb-10
+          "
+        >
 
           {/* ADHERENCE */}
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-7">
+          <div
+            className="
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-7
+            "
+          >
 
             <div className="flex items-center justify-between mb-7">
 
-              <div className="w-12 h-12 rounded-xl bg-cyan-400/10 flex items-center justify-center">
-
+              <div
+                className="
+                  w-12 h-12
+                  rounded-xl
+                  bg-cyan-400/10
+                  flex items-center justify-center
+                "
+              >
                 <TrendingUp
                   size={23}
                   className="text-cyan-400"
                 />
-
               </div>
 
-              <span className="text-emerald-400 font-medium">
-                +4.2%
+              <span className="text-emerald-400 text-sm font-medium">
+                LIVE
               </span>
 
             </div>
@@ -335,14 +252,20 @@ function Dashboard() {
               Medication adherence
             </p>
 
-            <h3 className="text-4xl font-bold mt-2">
+            <h2 className="text-4xl font-bold mt-2">
               {adherencePercentage}%
-            </h3>
+            </h2>
 
             <div className="mt-6 h-2 bg-slate-700/60 rounded-full overflow-hidden">
 
               <div
-                className="h-full bg-cyan-400 rounded-full transition-all duration-500"
+                className="
+                  h-full
+                  bg-cyan-400
+                  rounded-full
+                  transition-all
+                  duration-500
+                "
                 style={{
                   width: `${adherencePercentage}%`,
                 }}
@@ -352,97 +275,144 @@ function Dashboard() {
 
           </div>
 
+
           {/* DOSES */}
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-7">
+          <div
+            className="
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-7
+            "
+          >
 
-            <div className="w-12 h-12 rounded-xl bg-purple-400/10 flex items-center justify-center mb-7">
-
+            <div
+              className="
+                w-12 h-12
+                rounded-xl
+                bg-purple-400/10
+                flex items-center justify-center
+                mb-7
+              "
+            >
               <Pill
                 size={23}
                 className="text-purple-400"
               />
-
             </div>
 
             <p className="text-slate-400">
               Today's doses
             </p>
 
-            <h3 className="text-4xl font-bold mt-2">
+            <h2 className="text-4xl font-bold mt-2">
               {takenCount} / {totalDoses}
-            </h3>
+            </h2>
 
             <p className="text-sm text-slate-500 mt-2">
-
-              {remainingDoses === 0
+              {totalDoses === 0
+                ? "No medicines scheduled"
+                : remainingDoses === 0
                 ? "All doses completed"
                 : `${remainingDoses} dose${
                     remainingDoses === 1
                       ? ""
                       : "s"
                   } remaining`}
-
             </p>
 
           </div>
 
+
           {/* NEXT DOSE */}
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-7">
+          <div
+            className="
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-7
+            "
+          >
 
-            <div className="w-12 h-12 rounded-xl bg-orange-400/10 flex items-center justify-center mb-7">
-
+            <div
+              className="
+                w-12 h-12
+                rounded-xl
+                bg-orange-400/10
+                flex items-center justify-center
+                mb-7
+              "
+            >
               <Clock3
                 size={23}
                 className="text-orange-400"
               />
-
             </div>
 
             <p className="text-slate-400">
               Next dose
             </p>
 
-            <h3 className="text-3xl font-bold mt-2">
-
+            <h2 className="text-3xl font-bold mt-2">
               {nextDose
-                ? nextDose.time
+                ? nextDose.time || "Scheduled"
+                : totalDoses === 0
+                ? "No medicines"
                 : "Completed"}
-
-            </h3>
+            </h2>
 
             <p className="text-sm text-slate-500 mt-2">
-
               {nextDose
                 ? nextDose.name
+                : totalDoses === 0
+                ? "Add a medicine to begin"
                 : "No doses remaining"}
-
             </p>
 
           </div>
 
+
           {/* DIGITAL TWIN */}
 
-          <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-7">
+          <div
+            className="
+              rounded-2xl
+              border
+              border-cyan-400/30
+              bg-cyan-400/5
+              p-7
+            "
+          >
 
             <div className="flex items-center justify-between mb-7">
 
-              <div className="w-12 h-12 rounded-xl bg-cyan-400/10 flex items-center justify-center">
-
+              <div
+                className="
+                  w-12 h-12
+                  rounded-xl
+                  bg-cyan-400/10
+                  flex items-center justify-center
+                "
+              >
                 <HeartPulse
                   size={23}
                   className="text-cyan-400"
                 />
-
               </div>
 
-              <span className="flex items-center gap-2 text-emerald-400 text-sm">
-
+              <span
+                className="
+                  flex items-center gap-2
+                  text-emerald-400
+                  text-sm
+                "
+              >
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
-
                 LIVE
-
               </span>
 
             </div>
@@ -451,135 +421,204 @@ function Dashboard() {
               Digital Twin
             </p>
 
-            <h3 className="text-2xl font-bold mt-2">
-              Synced
-            </h3>
+            <h2 className="text-2xl font-bold mt-2">
+              {totalDoses === 0
+                ? "Waiting"
+                : "Synced"}
+            </h2>
 
             <p className="text-sm text-slate-500 mt-2">
-              Medication data synchronized
+              {totalDoses === 0
+                ? "Waiting for medication data"
+                : "Medication data synchronized"}
             </p>
 
           </div>
 
         </section>
 
-        {/* ===================================================
-            QUICK ACTIONS
-        =================================================== */}
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        {/* =================================================
+            QUICK ACTIONS
+        ================================================= */}
+
+        <section
+          className="
+            grid
+            grid-cols-1
+            md:grid-cols-3
+            gap-5
+            mb-10
+          "
+        >
 
           <Link
             to="/medicines"
-            className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-cyan-400/30 hover:bg-cyan-400/5 transition"
+            className="
+              group
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-6
+              hover:bg-white/[0.07]
+              transition
+            "
           >
 
             <div className="flex items-center justify-between">
 
-              <div className="flex items-center gap-4">
+              <div>
 
-                <div className="w-11 h-11 rounded-xl bg-cyan-400/10 flex items-center justify-center">
-
+                <div
+                  className="
+                    w-11 h-11
+                    rounded-xl
+                    bg-cyan-400/10
+                    flex items-center justify-center
+                    mb-5
+                  "
+                >
                   <Pill
-                    size={20}
+                    size={21}
                     className="text-cyan-400"
                   />
-
                 </div>
 
-                <div>
-                  <p className="font-semibold">
-                    Manage Medicines
-                  </p>
+                <h3 className="text-lg font-semibold">
+                  Manage Medicines
+                </h3>
 
-                  <p className="text-sm text-slate-500">
-                    Add or update medications
-                  </p>
-                </div>
+                <p className="text-sm text-slate-500 mt-1">
+                  Add or update medications
+                </p>
 
               </div>
 
               <ArrowRight
-                size={19}
-                className="text-slate-600 group-hover:text-cyan-400 transition"
+                size={20}
+                className="
+                  text-slate-500
+                  group-hover:text-cyan-400
+                  group-hover:translate-x-1
+                  transition
+                "
               />
 
             </div>
 
           </Link>
+
 
           <Link
             to="/analytics"
-            className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-cyan-400/30 hover:bg-cyan-400/5 transition"
+            className="
+              group
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-6
+              hover:bg-white/[0.07]
+              transition
+            "
           >
 
             <div className="flex items-center justify-between">
 
-              <div className="flex items-center gap-4">
+              <div>
 
-                <div className="w-11 h-11 rounded-xl bg-purple-400/10 flex items-center justify-center">
-
-                  <BarChart3
-                    size={20}
+                <div
+                  className="
+                    w-11 h-11
+                    rounded-xl
+                    bg-purple-400/10
+                    flex items-center justify-center
+                    mb-5
+                  "
+                >
+                  <TrendingUp
+                    size={21}
                     className="text-purple-400"
                   />
-
                 </div>
 
-                <div>
-                  <p className="font-semibold">
-                    View Analytics
-                  </p>
+                <h3 className="text-lg font-semibold">
+                  View Analytics
+                </h3>
 
-                  <p className="text-sm text-slate-500">
-                    Track adherence trends
-                  </p>
-                </div>
+                <p className="text-sm text-slate-500 mt-1">
+                  Track adherence trends
+                </p>
 
               </div>
 
               <ArrowRight
-                size={19}
-                className="text-slate-600 group-hover:text-cyan-400 transition"
+                size={20}
+                className="
+                  text-slate-500
+                  group-hover:text-purple-400
+                  group-hover:translate-x-1
+                  transition
+                "
               />
 
             </div>
 
           </Link>
 
+
           <Link
             to="/aichat"
-            className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-cyan-400/30 hover:bg-cyan-400/5 transition"
+            className="
+              group
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-6
+              hover:bg-white/[0.07]
+              transition
+            "
           >
 
             <div className="flex items-center justify-between">
 
-              <div className="flex items-center gap-4">
+              <div>
 
-                <div className="w-11 h-11 rounded-xl bg-emerald-400/10 flex items-center justify-center">
-
-                  <MessageCircle
-                    size={20}
+                <div
+                  className="
+                    w-11 h-11
+                    rounded-xl
+                    bg-emerald-400/10
+                    flex items-center justify-center
+                    mb-5
+                  "
+                >
+                  <ShieldCheck
+                    size={21}
                     className="text-emerald-400"
                   />
-
                 </div>
 
-                <div>
-                  <p className="font-semibold">
-                    Ask DoseTwin AI
-                  </p>
+                <h3 className="text-lg font-semibold">
+                  Ask DoseTwin AI
+                </h3>
 
-                  <p className="text-sm text-slate-500">
-                    Get medication insights
-                  </p>
-                </div>
+                <p className="text-sm text-slate-500 mt-1">
+                  Get medication insights
+                </p>
 
               </div>
 
               <ArrowRight
-                size={19}
-                className="text-slate-600 group-hover:text-cyan-400 transition"
+                size={20}
+                className="
+                  text-slate-500
+                  group-hover:text-emerald-400
+                  group-hover:translate-x-1
+                  transition
+                "
               />
 
             </div>
@@ -588,15 +627,30 @@ function Dashboard() {
 
         </section>
 
-        {/* ===================================================
-            LOWER SECTION
-        =================================================== */}
 
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* =================================================
+            TODAY'S MEDICATION
+        ================================================= */}
 
-          {/* MEDICATIONS */}
+        <section
+          className="
+            grid
+            grid-cols-1
+            lg:grid-cols-3
+            gap-6
+          "
+        >
 
-          <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-7">
+          <div
+            className="
+              lg:col-span-2
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-7
+            "
+          >
 
             <div className="flex items-center justify-between mb-7">
 
@@ -614,7 +668,11 @@ function Dashboard() {
 
               <Link
                 to="/medicines"
-                className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition"
+                className="
+                  flex items-center gap-2
+                  text-cyan-400
+                  hover:text-cyan-300
+                "
               >
                 Manage
                 <ArrowRight size={17} />
@@ -622,29 +680,39 @@ function Dashboard() {
 
             </div>
 
+
             {medicines.length === 0 ? (
 
-              <div className="py-14 text-center">
+              <div className="py-12 text-center">
 
                 <Pill
                   size={38}
                   className="mx-auto text-slate-600 mb-4"
                 />
 
-                <h4 className="text-lg font-semibold">
-                  No medicines added
-                </h4>
-
-                <p className="text-slate-500 mt-2 mb-5">
-                  Add your first medicine to get started.
+                <p className="text-slate-400">
+                  No medicines added yet.
                 </p>
 
                 <Link
                   to="/medicines"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-cyan-400 text-[#08111F] font-semibold"
+                  className="
+                    inline-flex
+                    items-center
+                    gap-2
+                    mt-5
+                    px-5
+                    py-3
+                    rounded-xl
+                    bg-cyan-400
+                    text-slate-950
+                    font-medium
+                    hover:bg-cyan-300
+                    transition
+                  "
                 >
-                  <Pill size={17} />
-                  Add Medicine
+                  Add medicine
+                  <ArrowRight size={17} />
                 </Link>
 
               </div>
@@ -655,18 +723,32 @@ function Dashboard() {
 
                 <div
                   key={medicine.id}
-                  className="flex items-center justify-between gap-4 p-4 rounded-xl bg-white/5 mb-3"
+                  className="
+                    flex
+                    items-center
+                    justify-between
+                    gap-4
+                    p-4
+                    rounded-xl
+                    bg-white/5
+                    mb-3
+                  "
                 >
 
                   <div className="flex items-center gap-4">
 
-                    <div className="w-11 h-11 rounded-xl bg-cyan-400/10 flex items-center justify-center">
-
+                    <div
+                      className="
+                        w-11 h-11
+                        rounded-xl
+                        bg-cyan-400/10
+                        flex items-center justify-center
+                      "
+                    >
                       <Pill
                         size={21}
                         className="text-cyan-400"
                       />
-
                     </div>
 
                     <div>
@@ -676,23 +758,36 @@ function Dashboard() {
                       </p>
 
                       <p className="text-sm text-slate-500">
-                        {medicine.dosage} •{" "}
+                        {medicine.dosage}
+                        {" • "}
                         {medicine.schedule}
+                        {medicine.time
+                          ? ` • ${medicine.time}`
+                          : ""}
                       </p>
 
                     </div>
 
                   </div>
 
+
                   <button
+                    type="button"
                     onClick={() =>
                       toggleTaken(medicine.id)
                     }
-                    className={`flex items-center gap-2 text-sm font-medium ${
-                      medicine.taken
-                        ? "text-emerald-400"
-                        : "text-orange-400"
-                    }`}
+                    className={`
+                      flex
+                      items-center
+                      gap-2
+                      text-sm
+                      font-medium
+                      ${
+                        medicine.taken
+                          ? "text-emerald-400"
+                          : "text-orange-400"
+                      }
+                    `}
                   >
 
                     {medicine.taken ? (
@@ -717,19 +812,42 @@ function Dashboard() {
 
           </div>
 
-          {/* AI INSIGHT */}
 
-          <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-7">
+          {/* =================================================
+              AI INSIGHT
+          ================================================= */}
 
-            <div className="flex items-center gap-4 mb-7">
+          <div
+            className="
+              rounded-2xl
+              border
+              border-cyan-400/30
+              bg-cyan-400/5
+              p-7
+            "
+          >
 
-              <div className="w-12 h-12 rounded-xl bg-cyan-400/10 flex items-center justify-center">
+            <div
+              className="
+                flex
+                items-center
+                gap-4
+                mb-7
+              "
+            >
 
+              <div
+                className="
+                  w-12 h-12
+                  rounded-xl
+                  bg-cyan-400/10
+                  flex items-center justify-center
+                "
+              >
                 <ShieldCheck
                   size={23}
                   className="text-cyan-400"
                 />
-
               </div>
 
               <div>
@@ -746,41 +864,81 @@ function Dashboard() {
 
             </div>
 
-            <p className="text-slate-300 leading-7">
+            {totalDoses === 0 ? (
 
-              Your medication adherence is{" "}
+              <p className="text-slate-300 leading-7">
+                Add your medications to start
+                generating personalized adherence
+                insights.
+              </p>
 
-              <span className="text-cyan-400 font-medium">
-                {adherencePercentage}%
-              </span>
-              .
+            ) : (
 
-              {" "}You have completed{" "}
+              <p className="text-slate-300 leading-7">
 
-              <span className="text-emerald-400 font-medium">
-                {takenCount}
-              </span>{" "}
+                Your medication adherence is{" "}
 
-              of{" "}
+                <span className="text-cyan-400 font-medium">
+                  {adherencePercentage}%
+                </span>
+                .
 
-              <span className="font-medium">
-                {totalDoses}
-              </span>{" "}
+                {" "}You have completed{" "}
 
-              scheduled doses today.
+                <span className="text-emerald-400 font-medium">
+                  {takenCount}
+                </span>{" "}
 
-            </p>
+                of{" "}
 
-            <div className="mt-7 rounded-xl border border-white/10 bg-black/10 p-5">
+                <span className="font-medium">
+                  {totalDoses}
+                </span>{" "}
 
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                scheduled doses today.
+
+              </p>
+
+            )}
+
+
+            <div
+              className="
+                mt-7
+                rounded-xl
+                border
+                border-white/10
+                bg-black/10
+                p-5
+              "
+            >
+
+              <p
+                className="
+                  text-xs
+                  text-slate-500
+                  uppercase
+                  tracking-wider
+                  mb-2
+                "
+              >
                 Digital Twin Status
               </p>
 
-              <p className="text-emerald-400 font-medium">
-                {remainingDoses === 0
+              <p
+                className={
+                  totalDoses === 0
+                    ? "text-slate-400 font-medium"
+                    : remainingDoses === 0
+                    ? "text-emerald-400 font-medium"
+                    : "text-cyan-400 font-medium"
+                }
+              >
+                {totalDoses === 0
+                  ? "Waiting • Add medication data"
+                  : remainingDoses === 0
                   ? "Stable • All doses completed"
-                  : "Stable • No alerts detected"}
+                  : "Active • Medication tracking enabled"}
               </p>
 
             </div>
