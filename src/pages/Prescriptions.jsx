@@ -1,214 +1,120 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
-  AlertCircle,
-  CalendarDays,
-  CheckCircle2,
-  FileText,
-  Pill,
-  Sparkles,
-  Trash2,
   Upload,
+  FileText,
+  Trash2,
+  Eye,
   X,
 } from "lucide-react";
 
+const STORAGE_KEY = "dosetwin_prescriptions";
+
+function loadPrescriptions() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored);
+
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Could not load prescriptions:", error);
+    return [];
+  }
+}
+
+function savePrescriptions(prescriptions) {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(prescriptions)
+  );
+}
+
 function Prescriptions() {
-  const fileInputRef = useRef(null);
+  const [prescriptions, setPrescriptions] =
+    useState(loadPrescriptions);
 
-  const [file, setFile] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [previewFile, setPreviewFile] =
+    useState(null);
 
-  const [prescription, setPrescription] = useState(null);
+  const handleUpload = (event) => {
+    const file = event.target.files?.[0];
 
-  /* =========================================================
-     FILE SELECTION
-  ========================================================= */
+    if (!file) return;
 
-  const handleFile = (selectedFile) => {
-    if (!selectedFile) {
-      return;
-    }
+    /*
+      For now we store the uploaded prescription
+      as a browser preview.
 
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ];
+      Later we will connect this to AI/OCR so
+      DoseTwin can read the prescription.
+    */
 
-    if (!allowedTypes.includes(selectedFile.type)) {
-      alert(
-        "Please upload a PDF, JPG, PNG, or WEBP file."
-      );
+    const reader = new FileReader();
 
-      return;
-    }
+    reader.onload = () => {
+      const newPrescription = {
+        id: Date.now(),
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data: reader.result,
+        uploadedAt: new Date().toISOString(),
+      };
 
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      alert(
-        "File size must be less than 10 MB."
-      );
+      const updated = [
+        newPrescription,
+        ...prescriptions,
+      ];
 
-      return;
-    }
+      setPrescriptions(updated);
+      savePrescriptions(updated);
+    };
 
-    setFile(selectedFile);
-    setPrescription(null);
-    setShowPreview(false);
+    reader.readAsDataURL(file);
+
+    event.target.value = "";
   };
 
-  /* =========================================================
-     INPUT CHANGE
-  ========================================================= */
-
-  const handleInputChange = (event) => {
-    const selectedFile =
-      event.target.files?.[0];
-
-    handleFile(selectedFile);
-  };
-
-  /* =========================================================
-     DRAG EVENTS
-  ========================================================= */
-
-  const handleDragOver = (event) => {
-    event.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (event) => {
-    event.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (event) => {
-    event.preventDefault();
-
-    setIsDragging(false);
-
-    const droppedFile =
-      event.dataTransfer.files?.[0];
-
-    handleFile(droppedFile);
-  };
-
-  /* =========================================================
-     REMOVE FILE
-  ========================================================= */
-
-  const removeFile = () => {
-    setFile(null);
-    setPrescription(null);
-    setShowPreview(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  /* =========================================================
-     PROCESS PRESCRIPTION
-     
-     TEMPORARY MOCK EXTRACTION
-     
-     Later this will connect to Gemini/backend.
-  ========================================================= */
-
-  const processPrescription = () => {
-    if (!file) {
-      return;
-    }
-
-    setIsProcessing(true);
-
-    setTimeout(() => {
-      setPrescription({
-        doctor: "Prescription detected",
-        date: new Date()
-          .toISOString()
-          .split("T")[0],
-
-        medicines: [
-          {
-            id: 1,
-            name: "Metformin",
-            dosage: "500 mg",
-            form: "Tablet",
-            frequency: "Once daily",
-            time: "08:00",
-            startDate: "",
-            endDate: "",
-            quantity: 30,
-            instructions:
-              "Take after breakfast",
-          },
-        ],
-      });
-
-      setIsProcessing(false);
-      setShowPreview(true);
-    }, 1500);
-  };
-
-  /* =========================================================
-     CONFIRM PRESCRIPTION
-     
-     For now this only confirms the extracted data.
-     Next step will connect it to medicines.js/localStorage.
-  ========================================================= */
-
-  const confirmPrescription = () => {
-    if (!prescription) {
-      return;
-    }
-
-    localStorage.setItem(
-      "dosetwin_latest_prescription",
-      JSON.stringify(prescription)
+  const deletePrescription = (id) => {
+    const confirmed = window.confirm(
+      "Delete this prescription?"
     );
 
-    alert(
-      "Prescription saved successfully."
+    if (!confirmed) return;
+
+    const updated = prescriptions.filter(
+      (prescription) =>
+        prescription.id !== id
     );
 
-    setShowPreview(false);
+    setPrescriptions(updated);
+    savePrescriptions(updated);
   };
-
-  /* =========================================================
-     FORMAT FILE SIZE
-  ========================================================= */
 
   const formatFileSize = (bytes) => {
+    if (!bytes) return "Unknown size";
+
     if (bytes < 1024) {
       return `${bytes} B`;
     }
 
     if (bytes < 1024 * 1024) {
-      return `${(
-        bytes / 1024
-      ).toFixed(1)} KB`;
+      return `${(bytes / 1024).toFixed(1)} KB`;
     }
 
-    return `${(
-      bytes /
-      (1024 * 1024)
-    ).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024)).toFixed(
+      1
+    )} MB`;
   };
-
-  /* =========================================================
-     RENDER
-  ========================================================= */
 
   return (
     <div className="min-h-screen bg-[#08111F] text-white">
 
-      <main className="max-w-[1200px] mx-auto px-6 md:px-8 py-10">
+      <main className="max-w-[1400px] mx-auto px-6 md:px-8 py-10">
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        {/* HEADER */}
 
         <section className="mb-10">
 
@@ -216,733 +122,491 @@ function Prescriptions() {
             PRESCRIPTION MANAGEMENT
           </p>
 
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-            Prescriptions
-          </h1>
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
 
-          <p className="text-lg text-slate-400 mt-4 max-w-3xl">
-            Upload a prescription and let DoseTwin
-            extract your medication schedule,
-            dosage, duration, and instructions.
-          </p>
+            <div>
 
-        </section>
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+                Prescriptions
+              </h1>
 
-
-        {/* =================================================
-            UPLOAD CARD
-        ================================================= */}
-
-        {!showPreview && (
-
-          <section
-            className="
-              rounded-3xl
-              border
-              border-white/10
-              bg-[#0D1B30]
-              p-6
-              md:p-8
-            "
-          >
-
-            <div className="flex items-center gap-4 mb-7">
-
-              <div
-                className="
-                  w-12
-                  h-12
-                  rounded-xl
-                  bg-cyan-400/10
-                  flex
-                  items-center
-                  justify-center
-                "
-              >
-
-                <FileText
-                  size={23}
-                  className="text-cyan-400"
-                />
-
-              </div>
-
-              <div>
-
-                <h2 className="text-2xl font-semibold">
-                  Upload prescription
-                </h2>
-
-                <p className="text-sm text-slate-500 mt-1">
-                  PDF, JPG, PNG, or WEBP · Max 10 MB
-                </p>
-
-              </div>
-
-            </div>
-
-
-            {/* DROPZONE */}
-
-            {!file ? (
-
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() =>
-                  fileInputRef.current?.click()
-                }
-                className={`
-                  min-h-[320px]
-                  rounded-2xl
-                  border-2
-                  border-dashed
-                  flex
-                  flex-col
-                  items-center
-                  justify-center
-                  text-center
-                  cursor-pointer
-                  transition
-                  ${
-                    isDragging
-                      ? `
-                        border-cyan-400
-                        bg-cyan-400/10
-                      `
-                      : `
-                        border-white/10
-                        bg-white/[0.02]
-                        hover:border-cyan-400/40
-                        hover:bg-white/[0.04]
-                      `
-                  }
-                `}
-              >
-
-                <div
-                  className="
-                    w-16
-                    h-16
-                    rounded-2xl
-                    bg-cyan-400/10
-                    flex
-                    items-center
-                    justify-center
-                    mb-5
-                  "
-                >
-
-                  <Upload
-                    size={28}
-                    className="text-cyan-400"
-                  />
-
-                </div>
-
-                <h3 className="text-xl font-semibold">
-                  Drop your prescription here
-                </h3>
-
-                <p className="text-slate-500 mt-2">
-                  or click to browse your files
-                </p>
-
-                <div className="flex items-center gap-2 mt-5">
-
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 text-xs text-slate-400">
-                    PDF
-                  </span>
-
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 text-xs text-slate-400">
-                    JPG
-                  </span>
-
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 text-xs text-slate-400">
-                    PNG
-                  </span>
-
-                </div>
-
-              </div>
-
-            ) : (
-
-              /* =================================================
-                 SELECTED FILE
-              ================================================= */
-
-              <div
-                className="
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-white/[0.03]
-                  p-5
-                "
-              >
-
-                <div className="flex items-center gap-4">
-
-                  <div
-                    className="
-                      w-12
-                      h-12
-                      rounded-xl
-                      bg-cyan-400/10
-                      flex
-                      items-center
-                      justify-center
-                      shrink-0
-                    "
-                  >
-
-                    <FileText
-                      size={22}
-                      className="text-cyan-400"
-                    />
-
-                  </div>
-
-
-                  <div className="flex-1 min-w-0">
-
-                    <p className="font-medium truncate">
-                      {file.name}
-                    </p>
-
-                    <p className="text-xs text-slate-500 mt-1">
-                      {formatFileSize(file.size)}
-                    </p>
-
-                  </div>
-
-
-                  <button
-                    type="button"
-                    onClick={removeFile}
-                    className="
-                      w-9
-                      h-9
-                      rounded-lg
-                      bg-white/5
-                      hover:bg-red-400/10
-                      text-slate-400
-                      hover:text-red-400
-                      flex
-                      items-center
-                      justify-center
-                    "
-                  >
-
-                    <Trash2 size={17} />
-
-                  </button>
-
-                </div>
-
-
-                {/* PROCESS BUTTON */}
-
-                <button
-                  type="button"
-                  onClick={processPrescription}
-                  disabled={isProcessing}
-                  className="
-                    w-full
-                    mt-5
-                    h-12
-                    rounded-xl
-                    bg-cyan-400
-                    hover:bg-cyan-300
-                    disabled:opacity-50
-                    disabled:cursor-not-allowed
-                    text-[#06111F]
-                    font-semibold
-                    flex
-                    items-center
-                    justify-center
-                    gap-2
-                    transition
-                  "
-                >
-
-                  {isProcessing ? (
-                    <>
-                      <Sparkles
-                        size={18}
-                        className="animate-pulse"
-                      />
-
-                      Analyzing prescription...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={18} />
-
-                      Analyze prescription
-                    </>
-                  )}
-
-                </button>
-
-              </div>
-
-            )}
-
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-              onChange={handleInputChange}
-              className="hidden"
-            />
-
-
-            {/* INFO */}
-
-            <div
-              className="
-                flex
-                items-start
-                gap-3
-                mt-6
-                rounded-xl
-                border
-                border-cyan-400/10
-                bg-cyan-400/[0.03]
-                p-4
-              "
-            >
-
-              <AlertCircle
-                size={18}
-                className="text-cyan-400 mt-0.5 shrink-0"
-              />
-
-              <p className="text-sm text-slate-400">
-                DoseTwin will extract medication
-                information from the prescription.
-                You will review the detected
-                information before it changes your
-                medication data.
+              <p className="text-lg text-slate-400 mt-4 max-w-2xl">
+                Upload and manage your prescriptions.
+                DoseTwin will use them later to understand
+                your medication schedule and requirements.
               </p>
 
             </div>
 
-          </section>
+            {/* UPLOAD BUTTON */}
 
-        )}
-
-
-        {/* =================================================
-            AI EXTRACTION RESULT
-        ================================================= */}
-
-        {showPreview && prescription && (
-
-          <section
-            className="
-              rounded-3xl
-              border
-              border-white/10
-              bg-[#0D1B30]
-              p-6
-              md:p-8
-            "
-          >
-
-            {/* RESULT HEADER */}
-
-            <div
+            <label
               className="
-                flex
-                flex-col
-                md:flex-row
-                md:items-center
-                md:justify-between
-                gap-5
-                mb-8
+                inline-flex
+                items-center
+                justify-center
+                gap-3
+                px-7
+                py-4
+                rounded-full
+                bg-cyan-400
+                hover:bg-cyan-300
+                text-[#06111F]
+                font-semibold
+                text-lg
+                cursor-pointer
+                transition
+                shadow-[0_0_30px_rgba(34,211,238,0.15)]
               "
             >
 
-              <div className="flex items-center gap-4">
+              <Upload size={21} />
 
-                <div
-                  className="
-                    w-12
-                    h-12
-                    rounded-xl
-                    bg-emerald-400/10
-                    flex
-                    items-center
-                    justify-center
-                  "
-                >
+              Upload Prescription
 
-                  <CheckCircle2
-                    size={23}
-                    className="text-emerald-400"
-                  />
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                onChange={handleUpload}
+                className="hidden"
+              />
 
-                </div>
+            </label>
 
-                <div>
+          </div>
 
-                  <h2 className="text-2xl font-semibold">
-                    Prescription detected
-                  </h2>
-
-                  <p className="text-sm text-slate-500 mt-1">
-                    Review the extracted information
-                    before confirming.
-                  </p>
-
-                </div>
-
-              </div>
+        </section>
 
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPreview(false);
-                  setPrescription(null);
-                }}
-                className="
-                  inline-flex
-                  items-center
-                  gap-2
-                  px-4
-                  py-2
-                  rounded-xl
-                  bg-white/5
-                  hover:bg-white/10
-                  text-slate-400
-                "
-              >
+        {/* INFORMATION CARD */}
 
-                <X size={17} />
+        <section
+          className="
+            rounded-2xl
+            border
+            border-cyan-400/10
+            bg-cyan-400/[0.03]
+            p-6
+            mb-8
+          "
+        >
 
-                Start over
-
-              </button>
-
-            </div>
-
-
-            {/* FILE */}
+          <div className="flex items-start gap-4">
 
             <div
               className="
+                w-11
+                h-11
+                shrink-0
                 rounded-xl
-                border
-                border-white/10
-                bg-white/[0.03]
-                p-4
-                mb-6
+                bg-cyan-400/10
+                flex
+                items-center
+                justify-center
               "
             >
 
-              <div className="flex items-center gap-3">
-
-                <FileText
-                  size={20}
-                  className="text-cyan-400"
-                />
-
-                <div>
-
-                  <p className="text-sm font-medium">
-                    {file?.name}
-                  </p>
-
-                  <p className="text-xs text-slate-500 mt-1">
-                    AI extraction completed
-                  </p>
-
-                </div>
-
-              </div>
+              <FileText
+                size={21}
+                className="text-cyan-400"
+              />
 
             </div>
-
-
-            {/* MEDICINES */}
 
             <div>
 
-              <div className="flex items-center gap-3 mb-4">
+              <h2 className="font-semibold">
+                How this will work
+              </h2>
 
-                <Pill
-                  size={20}
-                  className="text-cyan-400"
+              <p className="text-sm text-slate-400 mt-2 leading-6">
+                Upload a prescription as a PDF or image.
+                In the next stage, we'll add prescription
+                reading so DoseTwin can extract medicines,
+                dosage, frequency, and prescription dates
+                automatically.
+              </p>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* PRESCRIPTION LIST */}
+
+        <section>
+
+          <div className="flex items-center justify-between mb-6">
+
+            <div>
+
+              <h2 className="text-2xl font-semibold">
+                Your prescriptions
+              </h2>
+
+              <p className="text-slate-500 mt-1">
+                Uploaded prescription documents
+              </p>
+
+            </div>
+
+            <span className="text-sm text-slate-500">
+              {prescriptions.length}{" "}
+              {prescriptions.length === 1
+                ? "document"
+                : "documents"}
+            </span>
+
+          </div>
+
+
+          {prescriptions.length === 0 ? (
+
+            /* EMPTY STATE */
+
+            <div
+              className="
+                rounded-2xl
+                border
+                border-dashed
+                border-white/10
+                bg-white/[0.02]
+                py-24
+                text-center
+              "
+            >
+
+              <div
+                className="
+                  w-16
+                  h-16
+                  mx-auto
+                  rounded-2xl
+                  bg-white/5
+                  flex
+                  items-center
+                  justify-center
+                  mb-5
+                "
+              >
+
+                <FileText
+                  size={30}
+                  className="text-slate-600"
                 />
-
-                <h3 className="text-lg font-semibold">
-                  Detected medications
-                </h3>
 
               </div>
 
+              <h3 className="text-xl font-semibold">
+                No prescriptions yet
+              </h3>
 
-              <div className="space-y-4">
+              <p className="text-slate-500 mt-2">
+                Upload your first prescription
+                to get started.
+              </p>
 
-                {prescription.medicines.map(
-                  (medicine) => (
+            </div>
 
+          ) : (
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+              {prescriptions.map(
+                (prescription) => {
+
+                  const isImage =
+                    prescription.type?.startsWith(
+                      "image/"
+                    );
+
+                  return (
                     <div
-                      key={medicine.id}
+                      key={prescription.id}
                       className="
                         rounded-2xl
                         border
                         border-white/10
-                        bg-white/[0.03]
+                        bg-white/5
                         p-5
+                        hover:bg-white/[0.07]
+                        transition
                       "
                     >
 
                       <div className="flex items-start gap-4">
 
+                        {/* FILE ICON */}
+
                         <div
                           className="
-                            w-11
-                            h-11
+                            w-12
+                            h-12
+                            shrink-0
                             rounded-xl
                             bg-cyan-400/10
                             flex
                             items-center
                             justify-center
-                            shrink-0
                           "
                         >
 
-                          <Pill
-                            size={20}
+                          <FileText
+                            size={23}
                             className="text-cyan-400"
                           />
 
                         </div>
 
 
-                        <div className="flex-1">
+                        {/* INFORMATION */}
 
-                          <h4 className="text-lg font-semibold">
-                            {medicine.name}
-                          </h4>
+                        <div className="flex-1 min-w-0">
+
+                          <h3 className="font-semibold truncate">
+                            {prescription.name}
+                          </h3>
 
                           <p className="text-sm text-slate-500 mt-1">
-                            {medicine.dosage}
+                            {formatFileSize(
+                              prescription.size
+                            )}
                             {" · "}
-                            {medicine.form}
+                            {isImage
+                              ? "Image"
+                              : "PDF"}
                           </p>
 
-
-                          <div
-                            className="
-                              grid
-                              grid-cols-1
-                              md:grid-cols-3
-                              gap-4
-                              mt-5
-                            "
-                          >
-
-                            <div>
-
-                              <p className="text-xs text-slate-500">
-                                Frequency
-                              </p>
-
-                              <p className="text-sm text-slate-300 mt-1">
-                                {medicine.frequency}
-                              </p>
-
-                            </div>
-
-
-                            <div>
-
-                              <p className="text-xs text-slate-500">
-                                Dose time
-                              </p>
-
-                              <p className="text-sm text-slate-300 mt-1">
-                                {medicine.time}
-                              </p>
-
-                            </div>
-
-
-                            <div>
-
-                              <p className="text-xs text-slate-500">
-                                Quantity
-                              </p>
-
-                              <p className="text-sm text-slate-300 mt-1">
-                                {medicine.quantity}
-                              </p>
-
-                            </div>
-
-                          </div>
-
-
-                          <div
-                            className="
-                              flex
-                              items-center
-                              gap-2
-                              mt-4
-                              text-sm
-                              text-slate-400
-                            "
-                          >
-
-                            <CalendarDays
-                              size={15}
-                              className="text-slate-500"
-                            />
-
-                            <span>
-                              {medicine.startDate ||
-                                "Start date not detected"}
-                            </span>
-
-                            <span>
-                              →
-                            </span>
-
-                            <span>
-                              {medicine.endDate ||
-                                "End date not detected"}
-                            </span>
-
-                          </div>
-
-
-                          {medicine.instructions && (
-
-                            <p className="text-sm text-slate-500 mt-3">
-                              {medicine.instructions}
-                            </p>
-
-                          )}
+                          <p className="text-xs text-slate-600 mt-2">
+                            Uploaded{" "}
+                            {new Date(
+                              prescription.uploadedAt
+                            ).toLocaleDateString()}
+                          </p>
 
                         </div>
 
                       </div>
 
-                    </div>
 
-                  )
-                )}
+                      {/* ACTIONS */}
+
+                      <div
+                        className="
+                          mt-5
+                          pt-4
+                          border-t
+                          border-white/10
+                          flex
+                          items-center
+                          justify-between
+                        "
+                      >
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewFile(
+                              prescription
+                            )
+                          }
+                          className="
+                            inline-flex
+                            items-center
+                            gap-2
+                            px-4
+                            py-2
+                            rounded-full
+                            bg-white/5
+                            hover:bg-white/10
+                            text-sm
+                            text-slate-300
+                            transition
+                          "
+                        >
+
+                          <Eye size={16} />
+
+                          View
+
+                        </button>
+
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deletePrescription(
+                              prescription.id
+                            )
+                          }
+                          className="
+                            w-9
+                            h-9
+                            rounded-lg
+                            bg-red-400/5
+                            hover:bg-red-400/10
+                            flex
+                            items-center
+                            justify-center
+                            text-red-400
+                            transition
+                          "
+                          title="Delete prescription"
+                        >
+
+                          <Trash2 size={17} />
+
+                        </button>
+
+                      </div>
+
+                    </div>
+                  );
+                }
+              )}
+
+            </div>
+
+          )}
+
+        </section>
+
+      </main>
+
+
+      {/* PREVIEW MODAL */}
+
+      {previewFile && (
+
+        <div
+          className="
+            fixed
+            inset-0
+            z-[100]
+            bg-black/80
+            backdrop-blur-md
+            flex
+            items-center
+            justify-center
+            p-6
+          "
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setPreviewFile(null);
+            }
+          }}
+        >
+
+          <div
+            className="
+              w-full
+              max-w-5xl
+              max-h-[90vh]
+              rounded-2xl
+              overflow-hidden
+              border
+              border-white/10
+              bg-[#0B192B]
+              shadow-2xl
+              flex
+              flex-col
+            "
+          >
+
+            {/* MODAL HEADER */}
+
+            <div
+              className="
+                px-6
+                py-4
+                border-b
+                border-white/10
+                flex
+                items-center
+                justify-between
+              "
+            >
+
+              <div className="min-w-0">
+
+                <h2 className="font-semibold truncate">
+                  {previewFile.name}
+                </h2>
 
               </div>
 
-            </div>
-
-
-            {/* WARNING */}
-
-            <div
-              className="
-                flex
-                items-start
-                gap-3
-                mt-6
-                rounded-xl
-                border
-                border-orange-400/10
-                bg-orange-400/[0.03]
-                p-4
-              "
-            >
-
-              <AlertCircle
-                size={18}
-                className="text-orange-400 mt-0.5 shrink-0"
-              />
-
-              <p className="text-sm text-slate-400">
-                Always verify the extracted
-                medication information against the
-                original prescription before confirming.
-              </p>
-
-            </div>
-
-
-            {/* ACTIONS */}
-
-            <div
-              className="
-                flex
-                flex-col-reverse
-                sm:flex-row
-                justify-end
-                gap-3
-                mt-7
-                pt-6
-                border-t
-                border-white/10
-              "
-            >
-
               <button
                 type="button"
-                onClick={() => {
-                  setShowPreview(false);
-                  setPrescription(null);
-                }}
-                className="
-                  px-6
-                  py-3
-                  rounded-full
-                  border
-                  border-white/10
-                  bg-white/5
-                  hover:bg-white/10
-                  text-slate-300
-                  font-medium
-                "
-              >
-
-                Review again
-
-              </button>
-
-
-              <button
-                type="button"
-                onClick={
-                  confirmPrescription
+                onClick={() =>
+                  setPreviewFile(null)
                 }
                 className="
-                  px-7
-                  py-3
-                  rounded-full
-                  bg-cyan-400
-                  hover:bg-cyan-300
-                  text-[#06111F]
-                  font-semibold
+                  w-9
+                  h-9
+                  rounded-lg
+                  hover:bg-white/5
+                  flex
+                  items-center
+                  justify-center
+                  text-slate-400
+                  hover:text-white
                 "
               >
 
-                Confirm prescription
+                <X size={20} />
 
               </button>
 
             </div>
 
-          </section>
 
-        )}
+            {/* PREVIEW */}
 
-      </main>
+            <div
+              className="
+                flex-1
+                overflow-auto
+                bg-[#07101D]
+                p-5
+              "
+            >
+
+              {previewFile.type?.startsWith(
+                "image/"
+              ) ? (
+
+                <img
+                  src={previewFile.data}
+                  alt="Prescription"
+                  className="
+                    max-w-full
+                    mx-auto
+                    rounded-xl
+                  "
+                />
+
+              ) : (
+
+                <iframe
+                  src={previewFile.data}
+                  title="Prescription preview"
+                  className="w-full h-[70vh] rounded-xl"
+                />
+
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
 
     </div>
   );
