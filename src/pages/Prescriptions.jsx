@@ -1,142 +1,428 @@
 import { useState } from "react";
+
 import {
-  Upload,
-  FileText,
-  Trash2,
+  AlertCircle,
+  CheckCircle2,
   Eye,
+  FileText,
+  Pill,
+  Sparkles,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react";
 
 const STORAGE_KEY = "dosetwin_prescriptions";
 
+
+/* =========================================================
+   LOAD PRESCRIPTIONS
+========================================================= */
+
 function loadPrescriptions() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored =
+      localStorage.getItem(STORAGE_KEY);
 
-    if (!stored) return [];
+    if (!stored) {
+      return [];
+    }
 
-    const parsed = JSON.parse(stored);
+    const parsed =
+      JSON.parse(stored);
 
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+
   } catch (error) {
-    console.error("Could not load prescriptions:", error);
+    console.error(
+      "Could not load prescriptions:",
+      error
+    );
+
     return [];
   }
 }
 
-function savePrescriptions(prescriptions) {
+
+/* =========================================================
+   SAVE PRESCRIPTIONS
+========================================================= */
+
+function savePrescriptions(
+  prescriptions
+) {
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify(prescriptions)
   );
 }
 
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
+
 function Prescriptions() {
-  const [prescriptions, setPrescriptions] =
-    useState(loadPrescriptions);
 
-  const [previewFile, setPreviewFile] =
-    useState(null);
+  const [
+    prescriptions,
+    setPrescriptions,
+  ] = useState(
+    loadPrescriptions
+  );
 
-  const handleUpload = (event) => {
-    const file = event.target.files?.[0];
 
-    if (!file) return;
+  const [
+    previewFile,
+    setPreviewFile,
+  ] = useState(null);
+
+
+  const [
+    analyzingId,
+    setAnalyzingId,
+  ] = useState(null);
+
+
+  const [
+    analyzedId,
+    setAnalyzedId,
+  ] = useState(null);
+
+
+  /* =======================================================
+     UPLOAD
+  ======================================================= */
+
+  const handleUpload = (
+    event
+  ) => {
+
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
 
     /*
-      For now we store the uploaded prescription
-      as a browser preview.
-
-      Later we will connect this to AI/OCR so
-      DoseTwin can read the prescription.
+      Supported formats:
+      PDF
+      PNG
+      JPG
+      JPEG
+      WEBP
     */
 
-    const reader = new FileReader();
+    const allowedTypes = [
+      "application/pdf",
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ];
+
+
+    if (
+      !allowedTypes.includes(
+        file.type
+      )
+    ) {
+
+      alert(
+        "Please upload a PDF or image file."
+      );
+
+      event.target.value = "";
+
+      return;
+    }
+
+
+    /*
+      Limit file size to 10 MB.
+    */
+
+    if (
+      file.size >
+      10 * 1024 * 1024
+    ) {
+
+      alert(
+        "Prescription file must be smaller than 10 MB."
+      );
+
+      event.target.value = "";
+
+      return;
+    }
+
+
+    const reader =
+      new FileReader();
+
 
     reader.onload = () => {
+
       const newPrescription = {
+
         id: Date.now(),
+
         name: file.name,
+
         type: file.type,
+
         size: file.size,
+
         data: reader.result,
-        uploadedAt: new Date().toISOString(),
+
+        uploadedAt:
+          new Date().toISOString(),
+
+        analyzed: false,
+
       };
+
 
       const updated = [
         newPrescription,
         ...prescriptions,
       ];
 
-      setPrescriptions(updated);
-      savePrescriptions(updated);
+
+      setPrescriptions(
+        updated
+      );
+
+      savePrescriptions(
+        updated
+      );
+
     };
 
+
     reader.readAsDataURL(file);
+
+
+    /*
+      Allows the same file to be
+      uploaded again later.
+    */
 
     event.target.value = "";
   };
 
-  const deletePrescription = (id) => {
-    const confirmed = window.confirm(
-      "Delete this prescription?"
+
+  /* =======================================================
+     DELETE
+  ======================================================= */
+
+  const deletePrescription = (
+    id
+  ) => {
+
+    const confirmed =
+      window.confirm(
+        "Delete this prescription?"
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    const updated =
+      prescriptions.filter(
+        (prescription) =>
+          prescription.id !== id
+      );
+
+
+    setPrescriptions(
+      updated
     );
 
-    if (!confirmed) return;
-
-    const updated = prescriptions.filter(
-      (prescription) =>
-        prescription.id !== id
+    savePrescriptions(
+      updated
     );
 
-    setPrescriptions(updated);
-    savePrescriptions(updated);
+
+    if (
+      previewFile?.id === id
+    ) {
+      setPreviewFile(null);
+    }
+
+
+    if (
+      analyzedId === id
+    ) {
+      setAnalyzedId(null);
+    }
   };
 
-  const formatFileSize = (bytes) => {
-    if (!bytes) return "Unknown size";
+
+  /* =======================================================
+     FORMAT FILE SIZE
+  ======================================================= */
+
+  const formatFileSize = (
+    bytes
+  ) => {
+
+    if (!bytes) {
+      return "Unknown size";
+    }
+
 
     if (bytes < 1024) {
       return `${bytes} B`;
     }
 
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
+
+    if (
+      bytes <
+      1024 * 1024
+    ) {
+
+      return `${(
+        bytes / 1024
+      ).toFixed(1)} KB`;
+
     }
 
-    return `${(bytes / (1024 * 1024)).toFixed(
-      1
-    )} MB`;
+
+    return `${(
+      bytes /
+      (1024 * 1024)
+    ).toFixed(1)} MB`;
   };
 
+
+  /* =======================================================
+     ANALYZE PRESCRIPTION
+  ======================================================= */
+
+  const analyzePrescription = (
+    prescription
+  ) => {
+
+    /*
+      IMPORTANT:
+
+      This is intentionally NOT fake AI.
+
+      We are only preparing the UI and
+      application flow here.
+
+      Gemini/OCR will be connected in
+      the next step.
+    */
+
+    setAnalyzingId(
+      prescription.id
+    );
+
+
+    /*
+      Temporary delay so the interface
+      behaves like an analysis process.
+
+      This will be replaced by the
+      real AI request.
+    */
+
+    setTimeout(() => {
+
+      setAnalyzingId(null);
+
+      setAnalyzedId(
+        prescription.id
+      );
+
+    }, 1000);
+  };
+
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
   return (
+
     <div className="min-h-screen bg-[#08111F] text-white">
 
-      <main className="max-w-[1400px] mx-auto px-6 md:px-8 py-10">
+      <main
+        className="
+          max-w-[1400px]
+          mx-auto
+          px-6
+          md:px-8
+          py-10
+        "
+      >
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <section className="mb-10">
 
-          <p className="text-cyan-400 text-sm font-medium mb-3">
+          <p
+            className="
+              text-cyan-400
+              text-sm
+              font-medium
+              mb-3
+            "
+          >
             PRESCRIPTION MANAGEMENT
           </p>
 
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+
+          <div
+            className="
+              flex
+              flex-col
+              md:flex-row
+              md:items-start
+              md:justify-between
+              gap-6
+            "
+          >
 
             <div>
 
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+              <h1
+                className="
+                  text-4xl
+                  md:text-5xl
+                  font-bold
+                  tracking-tight
+                "
+              >
                 Prescriptions
               </h1>
 
-              <p className="text-lg text-slate-400 mt-4 max-w-2xl">
-                Upload and manage your prescriptions.
-                DoseTwin will use them later to understand
-                your medication schedule and requirements.
+
+              <p
+                className="
+                  text-lg
+                  text-slate-400
+                  mt-4
+                  max-w-3xl
+                "
+              >
+                Upload your prescriptions and
+                let DoseTwin prepare them for
+                medication extraction and review.
               </p>
 
             </div>
+
 
             {/* UPLOAD BUTTON */}
 
@@ -164,10 +450,13 @@ function Prescriptions() {
 
               Upload Prescription
 
+
               <input
                 type="file"
-                accept=".pdf,image/*"
-                onChange={handleUpload}
+                accept=".pdf,image/png,image/jpeg,image/webp"
+                onChange={
+                  handleUpload
+                }
                 className="hidden"
               />
 
@@ -178,20 +467,28 @@ function Prescriptions() {
         </section>
 
 
-        {/* INFORMATION CARD */}
+        {/* =================================================
+            AI INFORMATION
+        ================================================= */}
 
         <section
           className="
             rounded-2xl
             border
-            border-cyan-400/10
-            bg-cyan-400/[0.03]
+            border-cyan-400/20
+            bg-cyan-400/[0.04]
             p-6
             mb-8
           "
         >
 
-          <div className="flex items-start gap-4">
+          <div
+            className="
+              flex
+              items-start
+              gap-4
+            "
+          >
 
             <div
               className="
@@ -206,26 +503,147 @@ function Prescriptions() {
               "
             >
 
-              <FileText
+              <Sparkles
                 size={21}
                 className="text-cyan-400"
               />
 
             </div>
 
+
             <div>
 
-              <h2 className="font-semibold">
-                How this will work
+              <h2
+                className="
+                  font-semibold
+                  text-lg
+                "
+              >
+                AI Prescription Analysis
               </h2>
 
-              <p className="text-sm text-slate-400 mt-2 leading-6">
-                Upload a prescription as a PDF or image.
-                In the next stage, we'll add prescription
-                reading so DoseTwin can extract medicines,
-                dosage, frequency, and prescription dates
-                automatically.
+
+              <p
+                className="
+                  text-sm
+                  text-slate-400
+                  mt-2
+                  leading-6
+                "
+              >
+                DoseTwin will eventually read
+                the uploaded prescription and
+                identify medicines, dosage,
+                frequency, timing, quantity,
+                and prescription dates.
               </p>
+
+
+              <div
+                className="
+                  flex
+                  flex-wrap
+                  gap-2
+                  mt-4
+                "
+              >
+
+                <span
+                  className="
+                    px-3
+                    py-1.5
+                    rounded-lg
+                    bg-white/5
+                    border
+                    border-white/10
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  Medicine
+                </span>
+
+
+                <span
+                  className="
+                    px-3
+                    py-1.5
+                    rounded-lg
+                    bg-white/5
+                    border
+                    border-white/10
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  Dosage
+                </span>
+
+
+                <span
+                  className="
+                    px-3
+                    py-1.5
+                    rounded-lg
+                    bg-white/5
+                    border
+                    border-white/10
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  Frequency
+                </span>
+
+
+                <span
+                  className="
+                    px-3
+                    py-1.5
+                    rounded-lg
+                    bg-white/5
+                    border
+                    border-white/10
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  Schedule
+                </span>
+
+
+                <span
+                  className="
+                    px-3
+                    py-1.5
+                    rounded-lg
+                    bg-white/5
+                    border
+                    border-white/10
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  Quantity
+                </span>
+
+
+                <span
+                  className="
+                    px-3
+                    py-1.5
+                    rounded-lg
+                    bg-white/5
+                    border
+                    border-white/10
+                    text-xs
+                    text-slate-400
+                  "
+                >
+                  Dates
+                </span>
+
+              </div>
 
             </div>
 
@@ -234,35 +652,65 @@ function Prescriptions() {
         </section>
 
 
-        {/* PRESCRIPTION LIST */}
+        {/* =================================================
+            PRESCRIPTIONS
+        ================================================= */}
 
         <section>
 
-          <div className="flex items-center justify-between mb-6">
+          <div
+            className="
+              flex
+              items-center
+              justify-between
+              mb-6
+            "
+          >
 
             <div>
 
-              <h2 className="text-2xl font-semibold">
+              <h2
+                className="
+                  text-2xl
+                  font-semibold
+                "
+              >
                 Your prescriptions
               </h2>
 
-              <p className="text-slate-500 mt-1">
+
+              <p
+                className="
+                  text-slate-500
+                  mt-1
+                "
+              >
                 Uploaded prescription documents
               </p>
 
             </div>
 
-            <span className="text-sm text-slate-500">
+
+            <span
+              className="
+                text-sm
+                text-slate-500
+              "
+            >
               {prescriptions.length}{" "}
-              {prescriptions.length === 1
+
+              {prescriptions.length ===
+              1
                 ? "document"
                 : "documents"}
+
             </span>
 
           </div>
 
 
-          {prescriptions.length === 0 ? (
+          {prescriptions.length ===
+          0 ? (
 
             /* EMPTY STATE */
 
@@ -299,11 +747,23 @@ function Prescriptions() {
 
               </div>
 
-              <h3 className="text-xl font-semibold">
+
+              <h3
+                className="
+                  text-xl
+                  font-semibold
+                "
+              >
                 No prescriptions yet
               </h3>
 
-              <p className="text-slate-500 mt-2">
+
+              <p
+                className="
+                  text-slate-500
+                  mt-2
+                "
+              >
                 Upload your first prescription
                 to get started.
               </p>
@@ -312,7 +772,14 @@ function Prescriptions() {
 
           ) : (
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div
+              className="
+                grid
+                grid-cols-1
+                lg:grid-cols-2
+                gap-5
+              "
+            >
 
               {prescriptions.map(
                 (prescription) => {
@@ -322,23 +789,43 @@ function Prescriptions() {
                       "image/"
                     );
 
+
+                  const isAnalyzing =
+                    analyzingId ===
+                    prescription.id;
+
+
+                  const isAnalyzed =
+                    analyzedId ===
+                    prescription.id;
+
+
                   return (
+
                     <div
-                      key={prescription.id}
+                      key={
+                        prescription.id
+                      }
                       className="
                         rounded-2xl
                         border
                         border-white/10
                         bg-white/5
-                        p-5
+                        p-6
                         hover:bg-white/[0.07]
                         transition
                       "
                     >
 
-                      <div className="flex items-start gap-4">
+                      {/* FILE HEADER */}
 
-                        {/* FILE ICON */}
+                      <div
+                        className="
+                          flex
+                          items-start
+                          gap-4
+                        "
+                      >
 
                         <div
                           className="
@@ -361,25 +848,49 @@ function Prescriptions() {
                         </div>
 
 
-                        {/* INFORMATION */}
+                        <div
+                          className="
+                            flex-1
+                            min-w-0
+                          "
+                        >
 
-                        <div className="flex-1 min-w-0">
-
-                          <h3 className="font-semibold truncate">
+                          <h3
+                            className="
+                              font-semibold
+                              truncate
+                            "
+                          >
                             {prescription.name}
                           </h3>
 
-                          <p className="text-sm text-slate-500 mt-1">
+
+                          <p
+                            className="
+                              text-sm
+                              text-slate-500
+                              mt-1
+                            "
+                          >
                             {formatFileSize(
                               prescription.size
                             )}
+
                             {" · "}
+
                             {isImage
                               ? "Image"
                               : "PDF"}
                           </p>
 
-                          <p className="text-xs text-slate-600 mt-2">
+
+                          <p
+                            className="
+                              text-xs
+                              text-slate-600
+                              mt-2
+                            "
+                          >
                             Uploaded{" "}
                             {new Date(
                               prescription.uploadedAt
@@ -391,17 +902,175 @@ function Prescriptions() {
                       </div>
 
 
+                      {/* ANALYSIS AREA */}
+
+                      <div
+                        className="
+                          mt-6
+                          rounded-xl
+                          border
+                          border-white/10
+                          bg-black/10
+                          p-5
+                        "
+                      >
+
+                        <div
+                          className="
+                            flex
+                            items-start
+                            gap-3
+                          "
+                        >
+
+                          <div
+                            className="
+                              w-9
+                              h-9
+                              shrink-0
+                              rounded-lg
+                              bg-purple-400/10
+                              flex
+                              items-center
+                              justify-center
+                            "
+                          >
+
+                            <Sparkles
+                              size={17}
+                              className="text-purple-400"
+                            />
+
+                          </div>
+
+
+                          <div
+                            className="
+                              flex-1
+                            "
+                          >
+
+                            <h4
+                              className="
+                                text-sm
+                                font-semibold
+                              "
+                            >
+                              Prescription analysis
+                            </h4>
+
+
+                            {isAnalyzed ? (
+
+                              <div
+                                className="
+                                  mt-3
+                                  flex
+                                  items-start
+                                  gap-2
+                                  text-sm
+                                  text-amber-400
+                                "
+                              >
+
+                                <AlertCircle
+                                  size={17}
+                                  className="shrink-0 mt-0.5"
+                                />
+
+                                <p>
+                                  AI extraction
+                                  will be connected
+                                  in the next step.
+                                </p>
+
+                              </div>
+
+                            ) : (
+
+                              <p
+                                className="
+                                  text-xs
+                                  text-slate-500
+                                  mt-1
+                                  leading-5
+                                "
+                              >
+                                Analyze this prescription
+                                to extract medication
+                                information.
+                              </p>
+
+                            )}
+
+                          </div>
+
+                        </div>
+
+
+                        {/* ANALYZE BUTTON */}
+
+                        {!isAnalyzed && (
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              analyzePrescription(
+                                prescription
+                              )
+                            }
+                            disabled={
+                              isAnalyzing
+                            }
+                            className="
+                              w-full
+                              mt-5
+                              inline-flex
+                              items-center
+                              justify-center
+                              gap-2
+                              px-5
+                              py-3
+                              rounded-xl
+                              bg-purple-400/10
+                              hover:bg-purple-400/20
+                              border
+                              border-purple-400/20
+                              text-purple-300
+                              font-medium
+                              transition
+                              disabled:opacity-50
+                              disabled:cursor-not-allowed
+                            "
+                          >
+
+                            <Sparkles
+                              size={17}
+                            />
+
+                            {isAnalyzing
+                              ? "Preparing analysis..."
+                              : "Analyze Prescription"}
+
+                          </button>
+
+                        )}
+
+                      </div>
+
+
                       {/* ACTIONS */}
 
                       <div
                         className="
                           mt-5
-                          pt-4
+                          pt-5
                           border-t
                           border-white/10
                           flex
                           items-center
                           justify-between
+                          gap-3
                         "
                       >
 
@@ -417,7 +1086,7 @@ function Prescriptions() {
                             items-center
                             gap-2
                             px-4
-                            py-2
+                            py-2.5
                             rounded-full
                             bg-white/5
                             hover:bg-white/10
@@ -432,6 +1101,38 @@ function Prescriptions() {
                           View
 
                         </button>
+
+
+                        {isAnalyzed && (
+
+                          <button
+                            type="button"
+                            disabled
+                            className="
+                              inline-flex
+                              items-center
+                              gap-2
+                              px-4
+                              py-2.5
+                              rounded-full
+                              bg-emerald-400/10
+                              border
+                              border-emerald-400/20
+                              text-sm
+                              text-emerald-400
+                              cursor-not-allowed
+                            "
+                          >
+
+                            <CheckCircle2
+                              size={16}
+                            />
+
+                            Review extraction
+
+                          </button>
+
+                        )}
 
 
                         <button
@@ -456,13 +1157,16 @@ function Prescriptions() {
                           title="Delete prescription"
                         >
 
-                          <Trash2 size={17} />
+                          <Trash2
+                            size={17}
+                          />
 
                         </button>
 
                       </div>
 
                     </div>
+
                   );
                 }
               )}
@@ -473,10 +1177,88 @@ function Prescriptions() {
 
         </section>
 
+
+        {/* =================================================
+            FUTURE WORKFLOW
+        ================================================= */}
+
+        <section
+          className="
+            mt-10
+            rounded-2xl
+            border
+            border-white/10
+            bg-white/[0.02]
+            p-6
+          "
+        >
+
+          <div
+            className="
+              flex
+              items-start
+              gap-4
+            "
+          >
+
+            <div
+              className="
+                w-10
+                h-10
+                rounded-xl
+                bg-emerald-400/10
+                flex
+                items-center
+                justify-center
+                shrink-0
+              "
+            >
+
+              <Pill
+                size={19}
+                className="text-emerald-400"
+              />
+
+            </div>
+
+
+            <div>
+
+              <h3
+                className="
+                  font-semibold
+                "
+              >
+                Next step
+              </h3>
+
+
+              <p
+                className="
+                  text-sm
+                  text-slate-500
+                  mt-1
+                  leading-6
+                "
+              >
+                Once prescription analysis is
+                connected, extracted medicines will
+                be reviewed here before being added
+                to your medication schedule.
+              </p>
+
+            </div>
+
+          </div>
+
+        </section>
+
       </main>
 
 
-      {/* PREVIEW MODAL */}
+      {/* ===================================================
+          PREVIEW MODAL
+      =================================================== */}
 
       {previewFile && (
 
@@ -493,12 +1275,16 @@ function Prescriptions() {
             p-6
           "
           onMouseDown={(event) => {
+
             if (
               event.target ===
               event.currentTarget
             ) {
+
               setPreviewFile(null);
+
             }
+
           }}
         >
 
@@ -518,7 +1304,7 @@ function Prescriptions() {
             "
           >
 
-            {/* MODAL HEADER */}
+            {/* HEADER */}
 
             <div
               className="
@@ -532,18 +1318,30 @@ function Prescriptions() {
               "
             >
 
-              <div className="min-w-0">
+              <div
+                className="
+                  min-w-0
+                "
+              >
 
-                <h2 className="font-semibold truncate">
+                <h2
+                  className="
+                    font-semibold
+                    truncate
+                  "
+                >
                   {previewFile.name}
                 </h2>
 
               </div>
 
+
               <button
                 type="button"
                 onClick={() =>
-                  setPreviewFile(null)
+                  setPreviewFile(
+                    null
+                  )
                 }
                 className="
                   w-9
@@ -581,7 +1379,9 @@ function Prescriptions() {
               ) ? (
 
                 <img
-                  src={previewFile.data}
+                  src={
+                    previewFile.data
+                  }
                   alt="Prescription"
                   className="
                     max-w-full
@@ -593,9 +1393,15 @@ function Prescriptions() {
               ) : (
 
                 <iframe
-                  src={previewFile.data}
+                  src={
+                    previewFile.data
+                  }
                   title="Prescription preview"
-                  className="w-full h-[70vh] rounded-xl"
+                  className="
+                    w-full
+                    h-[70vh]
+                    rounded-xl
+                  "
                 />
 
               )}
