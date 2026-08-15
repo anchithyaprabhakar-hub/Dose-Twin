@@ -9,6 +9,7 @@ import DashboardLayout from "./components/DashboardLayout";
 
 import Dashboard from "./pages/Dashboard";
 import Medicines from "./pages/Medicines";
+import Prescriptions from "./pages/Prescriptions";
 import Analytics from "./pages/Analytics";
 import AIChat from "./pages/AIChat";
 import DigitalTwin from "./pages/DigitalTwin";
@@ -23,9 +24,7 @@ function App() {
 
         {/* MAIN APPLICATION LAYOUT */}
 
-        <Route
-          element={<DashboardLayout />}
-        >
+        <Route element={<DashboardLayout />}>
 
           <Route
             path="/dashboard"
@@ -35,6 +34,11 @@ function App() {
           <Route
             path="/medicines"
             element={<Medicines />}
+          />
+
+          <Route
+            path="/prescriptions"
+            element={<Prescriptions />}
           />
 
           <Route
@@ -64,7 +68,6 @@ function App() {
 
         </Route>
 
-
         {/* DEFAULT */}
 
         <Route
@@ -76,7 +79,6 @@ function App() {
             />
           }
         />
-
 
         {/* UNKNOWN URL */}
 

@@ -3,6 +3,7 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  FileText,
   HeartPulse,
   LayoutDashboard,
   Pill,
@@ -24,6 +25,11 @@ const navigation = [
     name: "Medicines",
     path: "/medicines",
     icon: Pill,
+  },
+  {
+    name: "Prescriptions",
+    path: "/prescriptions",
+    icon: FileText,
   },
   {
     name: "Digital Twin",
@@ -115,7 +121,6 @@ function DashboardLayout() {
 
         </div>
 
-
         {/* NAVIGATION */}
 
         <nav className="p-4 space-y-2">
@@ -179,7 +184,6 @@ function DashboardLayout() {
 
         </nav>
 
-
         {/* COLLAPSE */}
 
         <button
@@ -219,7 +223,6 @@ function DashboardLayout() {
         </button>
 
       </aside>
-
 
       {/* MAIN AREA */}
 
@@ -290,7 +293,6 @@ function DashboardLayout() {
 
             </button>
 
-
             {/* PROFILE */}
 
             <div className="flex items-center gap-3">
@@ -333,7 +335,6 @@ function DashboardLayout() {
           </div>
 
         </header>
-
 
         {/* PAGE CONTENT */}
 
