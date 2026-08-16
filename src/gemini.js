@@ -14,23 +14,98 @@ const ai = new GoogleGenAI({
 
 
 /* =========================================================
-   GEMINI MODEL
+   MODELS
 ========================================================= */
 
-const MODEL = "gemini-3.6-flash";
+const PRIMARY_MODEL =
+  "gemini-3.6-flash";
+
+const FALLBACK_MODEL =
+  "gemini-3.5-flash-lite";
+
+
+/* =========================================================
+   HELPER
+========================================================= */
+
+function sleep(ms) {
+  return new Promise(
+    (resolve) => setTimeout(resolve, ms)
+  );
+}
+
+
+/* =========================================================
+   GEMINI REQUEST WITH FALLBACK
+========================================================= */
+
+async function generateWithFallback(
+  contents,
+  config = {}
+) {
+
+  try {
+
+    return await ai.models.generateContent({
+      model: PRIMARY_MODEL,
+      contents,
+      config,
+    });
+
+  } catch (primaryError) {
+
+    console.warn(
+      `${PRIMARY_MODEL} failed. Trying fallback model...`,
+      primaryError
+    );
+
+
+    /*
+      Gemini can temporarily return 503
+      when a model is under heavy demand.
+
+      Wait briefly before trying the
+      fallback model.
+    */
+
+    if (
+      primaryError?.status === 503 ||
+      primaryError?.code === 503 ||
+      primaryError?.message?.includes(
+        "high demand"
+      )
+    ) {
+
+      await sleep(1500);
+
+      return await ai.models.generateContent({
+        model: FALLBACK_MODEL,
+        contents,
+        config,
+      });
+
+    }
+
+
+    throw primaryError;
+  }
+}
 
 
 /* =========================================================
    TEXT GENERATION
 ========================================================= */
 
-export async function askGemini(prompt) {
+export async function askGemini(
+  prompt
+) {
+
   try {
+
     const response =
-      await ai.models.generateContent({
-        model: MODEL,
-        contents: prompt,
-      });
+      await generateWithFallback(
+        prompt
+      );
 
     return response.text || "";
 
@@ -47,309 +122,198 @@ export async function askGemini(prompt) {
 
 
 /* =========================================================
-   PRESCRIPTION SCHEMA
-========================================================= */
-
-const prescriptionSchema = {
-  type: "object",
-
-  properties: {
-
-    medicines: {
-      type: "array",
-
-      items: {
-        type: "object",
-
-        properties: {
-
-          name: {
-            type: "string"
-          },
-
-          dosage: {
-            type: "string"
-          },
-
-          form: {
-            type: "string"
-          },
-
-          frequency: {
-            type: "string"
-          },
-
-          doseTimes: {
-            type: "array",
-
-            items: {
-              type: "string"
-            }
-          },
-
-          prescribedQuantity: {
-            type: "integer"
-          },
-
-          startDate: {
-            type: "string"
-          },
-
-          endDate: {
-            type: "string"
-          },
-
-          instructions: {
-            type: "string"
-          }
-
-        },
-
-        required: [
-          "name",
-          "dosage",
-          "form",
-          "frequency",
-          "doseTimes",
-          "prescribedQuantity",
-          "startDate",
-          "endDate",
-          "instructions"
-        ]
-      }
-    },
-
-    doctorName: {
-      type: "string"
-    },
-
-    patientName: {
-      type: "string"
-    },
-
-    prescriptionDate: {
-      type: "string"
-    },
-
-    notes: {
-      type: "string"
-    }
-
-  },
-
-  required: [
-    "medicines",
-    "doctorName",
-    "patientName",
-    "prescriptionDate",
-    "notes"
-  ]
-};
-
-
-/* =========================================================
-   PRESCRIPTION PROMPT
-========================================================= */
-
-const prescriptionPrompt = `
-You are DoseTwin's prescription
-information extraction system.
-
-Analyze the attached prescription document.
-
-Extract ONLY information that is
-clearly visible or explicitly stated.
-
-This is an information extraction task.
-
-DO NOT:
-
-- diagnose the patient
-- recommend medicines
-- change the prescription
-- invent missing information
-- infer medical information that is not written
-- alter dosage instructions
-
-Extract the following:
-
-- medicine name
-- dosage
-- medicine form
-- frequency
-- exact dose times
-- prescribed quantity
-- start date
-- end date
-- instructions
-- doctor name
-- patient name
-- prescription date
-- other relevant notes
-
-Rules:
-
-1. Keep medicine names exactly as written
-   whenever possible.
-
-2. Preserve dosage units such as:
-   mg
-   mcg
-   g
-   mL
-   IU
-
-3. Convert clearly stated frequencies into
-   readable values such as:
-
-   Once daily
-   Twice daily
-   Three times daily
-   Four times daily
-   As needed
-
-4. If exact dose times are explicitly written,
-   return them in HH:MM format.
-
-5. If exact dose times are not written,
-   return an empty array.
-
-6. If prescribed quantity is unavailable,
-   return 0.
-
-7. If information is unavailable,
-   return an empty string.
-
-8. Never invent missing information.
-
-9. Preserve the doctor's instructions.
-
-10. If the document is unclear or unreadable,
-    leave the uncertain field empty.
-
-Return ONLY the requested JSON structure.
-`;
-
-
-/* =========================================================
-   ANALYZE PRESCRIPTION FILE
+   PRESCRIPTION ANALYSIS
 ========================================================= */
 
 export async function analyzePrescription(
-  prescriptionFile
+  prescription
 ) {
+
+  if (!prescription) {
+    throw new Error(
+      "No prescription was provided."
+    );
+  }
+
+
+  if (!prescription.data) {
+    throw new Error(
+      "Prescription file data is missing."
+    );
+  }
+
+
+  if (!prescription.type) {
+    throw new Error(
+      "Prescription file type is missing."
+    );
+  }
+
+
+  /*
+    Convert the stored data URL:
+
+    data:image/jpeg;base64,ABC123...
+
+    into:
+
+    ABC123...
+  */
+
+  const base64Data =
+    prescription.data.includes(",")
+      ? prescription.data.split(",")[1]
+      : prescription.data;
+
+
+  /* =======================================================
+     PROMPT
+  ======================================================= */
+
+  const prompt = `
+You are DoseTwin's prescription analysis AI.
+
+Analyze the uploaded prescription carefully.
+
+Your job is to extract ONLY information that
+can be confidently identified from the prescription.
+
+Do NOT invent information.
+
+Return ONLY valid JSON.
+
+Use exactly this structure:
+
+{
+  "medicines": [
+    {
+      "name": "",
+      "dosage": "",
+      "form": "",
+      "frequency": "",
+      "doseTimes": [],
+      "prescribedQuantity": 0,
+      "startDate": "",
+      "endDate": "",
+      "instructions": ""
+    }
+  ],
+  "doctorName": "",
+  "patientName": "",
+  "prescriptionDate": "",
+  "notes": ""
+}
+
+IMPORTANT RULES:
+
+1. Do not invent missing information.
+
+2. Use an empty string when information
+   cannot be confidently identified.
+
+3. Use 0 when prescribed quantity is
+   unavailable.
+
+4. Keep medicine names as written in
+   the prescription whenever possible.
+
+5. Preserve dosage units such as:
+   mg, mcg, g, mL, IU, etc.
+
+6. Convert clearly stated frequencies
+   into readable values such as:
+
+   "Once daily"
+   "Twice daily"
+   "Three times daily"
+   "Four times daily"
+   "As needed"
+
+7. If exact dose times are explicitly
+   written, return them in HH:MM format.
+
+8. If exact dose times are NOT written,
+   leave doseTimes as an empty array.
+
+9. Do not make medical recommendations.
+
+10. Do not change the doctor's prescription.
+
+11. Do not infer a medicine from context.
+
+12. If handwriting is unclear, leave the
+    relevant field empty instead of guessing.
+
+13. If multiple medicines are present,
+    return each medicine separately.
+
+14. Quantity must only be included when
+    explicitly stated.
+
+15. Dates must only be included when
+    explicitly stated.
+
+16. The uploaded document is the source
+    of truth.
+
+Analyze the prescription now.
+`;
+
+
+  /* =======================================================
+     GEMINI CONTENT
+  ======================================================= */
+
+  const contents = [
+
+    {
+      text: prompt,
+    },
+
+    {
+      inlineData: {
+        mimeType:
+          prescription.type,
+
+        data:
+          base64Data,
+      },
+    },
+
+  ];
+
+
+  /* =======================================================
+     API REQUEST
+  ======================================================= */
 
   try {
 
-    if (!prescriptionFile) {
-      throw new Error(
-        "No prescription file was provided."
-      );
-    }
-
-
-    if (!prescriptionFile.data) {
-      throw new Error(
-        "Prescription file data is missing."
-      );
-    }
-
-
-    if (!prescriptionFile.type) {
-      throw new Error(
-        "Prescription file type is missing."
-      );
-    }
-
-
-    /*
-      The uploaded file is stored by
-      Prescriptions.jsx as:
-
-      data:image/jpeg;base64,AAAA...
-
-      or
-
-      data:application/pdf;base64,AAAA...
-    */
-
-    const dataUrl =
-      prescriptionFile.data;
-
-
-    const commaIndex =
-      dataUrl.indexOf(",");
-
-
-    if (commaIndex === -1) {
-      throw new Error(
-        "Invalid prescription file data."
-      );
-    }
-
-
-    /*
-      Extract only the Base64 portion.
-    */
-
-    const base64Data =
-      dataUrl.substring(
-        commaIndex + 1
-      );
-
-
-    /*
-      Send the actual prescription file
-      to Gemini.
-    */
-
     const response =
-      await ai.models.generateContent({
-
-        model: MODEL,
-
-        contents: [
-
-          {
-            inlineData: {
-              mimeType:
-                prescriptionFile.type,
-
-              data:
-                base64Data
-            }
-          },
-
-          {
-            text:
-              prescriptionPrompt
-          }
-
-        ],
-
-        config: {
-
+      await generateWithFallback(
+        contents,
+        {
           responseMimeType:
             "application/json",
-
-          responseSchema:
-            prescriptionSchema
-
         }
-
-      });
+      );
 
 
     const text =
       response.text || "{}";
 
 
-    const result =
+    console.log(
+      "Gemini prescription response:",
+      text
+    );
+
+
+    const parsed =
       JSON.parse(text);
 
 
-    return result;
-
+    return parsed;
 
   } catch (error) {
 
@@ -362,9 +326,5 @@ export async function analyzePrescription(
   }
 }
 
-
-/* =========================================================
-   DEFAULT EXPORT
-========================================================= */
 
 export default ai;
