@@ -18,6 +18,11 @@ import {
 
 const STORAGE_KEY = "dosetwin_prescriptions";
 
+const MEDICINE_STORAGE_KEY =
+  "dosetwin_medicines";
+
+const MEDICINE_EVENT =
+  "dosetwin-medicines-updated";
 
 /* =========================================================
    LOAD PRESCRIPTIONS
@@ -38,7 +43,6 @@ function loadPrescriptions() {
     return Array.isArray(parsed)
       ? parsed
       : [];
-
   } catch (error) {
     console.error(
       "Could not load prescriptions:",
@@ -48,7 +52,6 @@ function loadPrescriptions() {
     return [];
   }
 }
-
 
 /* =========================================================
    SAVE PRESCRIPTIONS
@@ -63,13 +66,161 @@ function savePrescriptions(
   );
 }
 
+/* =========================================================
+   LOAD MEDICINES
+========================================================= */
+
+function loadMedicines() {
+  try {
+    const stored =
+      localStorage.getItem(
+        MEDICINE_STORAGE_KEY
+      );
+
+    if (!stored) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(stored);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch (error) {
+    console.error(
+      "Could not load medicines:",
+      error
+    );
+
+    return [];
+  }
+}
+
+/* =========================================================
+   SAVE MEDICINES
+========================================================= */
+
+function saveMedicines(
+  medicines
+) {
+  localStorage.setItem(
+    MEDICINE_STORAGE_KEY,
+    JSON.stringify(medicines)
+  );
+
+  /*
+    Tell Medicines.jsx that the
+    medicine data has changed.
+  */
+
+  window.dispatchEvent(
+    new Event(MEDICINE_EVENT)
+  );
+}
+
+/* =========================================================
+   FORMAT TIME
+========================================================= */
+
+function formatTime(time) {
+  if (!time) {
+    return "";
+  }
+
+  const parts =
+    time.split(":");
+
+  if (parts.length < 2) {
+    return "";
+  }
+
+  let hours =
+    Number(parts[0]);
+
+  const minutes =
+    parts[1];
+
+  if (
+    Number.isNaN(hours)
+  ) {
+    return "";
+  }
+
+  const period =
+    hours >= 12
+      ? "PM"
+      : "AM";
+
+  hours =
+    hours % 12 || 12;
+
+  return `${hours}:${minutes} ${period}`;
+}
+
+/* =========================================================
+   GET SCHEDULE
+========================================================= */
+
+function getSchedule(time) {
+  if (!time) {
+    return "Morning";
+  }
+
+  const hour =
+    Number(
+      time.split(":")[0]
+    );
+
+  if (
+    Number.isNaN(hour)
+  ) {
+    return "Morning";
+  }
+
+  if (
+    hour >= 5 &&
+    hour < 12
+  ) {
+    return "Morning";
+  }
+
+  if (
+    hour >= 12 &&
+    hour < 17
+  ) {
+    return "Afternoon";
+  }
+
+  if (
+    hour >= 17 &&
+    hour < 21
+  ) {
+    return "Evening";
+  }
+
+  return "Night";
+}
+
+/* =========================================================
+   NORMALIZE VALUE
+========================================================= */
+
+function normalizeText(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase();
+}
 
 /* =========================================================
    MAIN COMPONENT
 ========================================================= */
 
 function Prescriptions() {
-
   const [
     prescriptions,
     setPrescriptions,
@@ -77,30 +228,25 @@ function Prescriptions() {
     loadPrescriptions
   );
 
-
   const [
     previewFile,
     setPreviewFile,
   ] = useState(null);
-
 
   const [
     analyzingId,
     setAnalyzingId,
   ] = useState(null);
 
-
   const [
     analyzedId,
     setAnalyzedId,
   ] = useState(null);
 
-
   const [
     analysisResults,
     setAnalysisResults,
   ] = useState({});
-
 
   /* =======================================================
      UPLOAD
@@ -109,14 +255,12 @@ function Prescriptions() {
   const handleUpload = (
     event
   ) => {
-
     const file =
       event.target.files?.[0];
 
     if (!file) {
       return;
     }
-
 
     const allowedTypes = [
       "application/pdf",
@@ -125,13 +269,11 @@ function Prescriptions() {
       "image/webp",
     ];
 
-
     if (
       !allowedTypes.includes(
         file.type
       )
     ) {
-
       alert(
         "Please upload a PDF or image file."
       );
@@ -140,7 +282,6 @@ function Prescriptions() {
 
       return;
     }
-
 
     /*
       Maximum file size:
@@ -151,7 +292,6 @@ function Prescriptions() {
       file.size >
       10 * 1024 * 1024
     ) {
-
       alert(
         "Prescription file must be smaller than 10 MB."
       );
@@ -161,15 +301,11 @@ function Prescriptions() {
       return;
     }
 
-
     const reader =
       new FileReader();
 
-
     reader.onload = () => {
-
       const newPrescription = {
-
         id: Date.now(),
 
         name: file.name,
@@ -185,14 +321,19 @@ function Prescriptions() {
 
         analyzed: false,
 
-      };
+        /*
+          Keeps track of which medicines
+          from this prescription were
+          already added.
+        */
 
+        addedMedicineNames: [],
+      };
 
       const updated = [
         newPrescription,
         ...prescriptions,
       ];
-
 
       setPrescriptions(
         updated
@@ -201,12 +342,9 @@ function Prescriptions() {
       savePrescriptions(
         updated
       );
-
     };
 
-
     reader.readAsDataURL(file);
-
 
     /*
       Allow the same file to be
@@ -216,7 +354,6 @@ function Prescriptions() {
     event.target.value = "";
   };
 
-
   /* =======================================================
      DELETE
   ======================================================= */
@@ -224,24 +361,20 @@ function Prescriptions() {
   const deletePrescription = (
     id
   ) => {
-
     const confirmed =
       window.confirm(
         "Delete this prescription?"
       );
 
-
     if (!confirmed) {
       return;
     }
-
 
     const updated =
       prescriptions.filter(
         (prescription) =>
           prescription.id !== id
       );
-
 
     setPrescriptions(
       updated
@@ -251,13 +384,11 @@ function Prescriptions() {
       updated
     );
 
-
     if (
       previewFile?.id === id
     ) {
       setPreviewFile(null);
     }
-
 
     if (
       analyzedId === id
@@ -265,10 +396,8 @@ function Prescriptions() {
       setAnalyzedId(null);
     }
 
-
     setAnalysisResults(
       (previous) => {
-
         const updatedResults = {
           ...previous,
         };
@@ -280,7 +409,6 @@ function Prescriptions() {
     );
   };
 
-
   /* =======================================================
      FORMAT FILE SIZE
   ======================================================= */
@@ -288,35 +416,28 @@ function Prescriptions() {
   const formatFileSize = (
     bytes
   ) => {
-
     if (!bytes) {
       return "Unknown size";
     }
-
 
     if (bytes < 1024) {
       return `${bytes} B`;
     }
 
-
     if (
       bytes <
       1024 * 1024
     ) {
-
       return `${(
         bytes / 1024
       ).toFixed(1)} KB`;
-
     }
-
 
     return `${(
       bytes /
       (1024 * 1024)
     ).toFixed(1)} MB`;
   };
-
 
   /* =======================================================
      ANALYZE PRESCRIPTION
@@ -325,19 +446,16 @@ function Prescriptions() {
   const analyzePrescription = async (
     prescription
   ) => {
-
     try {
-
       setAnalyzingId(
         prescription.id
       );
 
       setAnalyzedId(null);
 
-
       /*
         Send the actual uploaded
-        PDF/image to Gemini.
+        prescription to Gemini.
       */
 
       const result =
@@ -345,12 +463,10 @@ function Prescriptions() {
           prescription
         );
 
-
       console.log(
         "Gemini prescription result:",
         result
       );
-
 
       /*
         Store extracted result
@@ -366,7 +482,6 @@ function Prescriptions() {
         })
       );
 
-
       /*
         Mark analysis complete.
       */
@@ -375,48 +490,457 @@ function Prescriptions() {
         prescription.id
       );
 
+      /*
+        Persist the fact that the
+        prescription has been analyzed.
+      */
 
+      const updatedPrescriptions =
+        prescriptions.map(
+          (item) =>
+            item.id ===
+            prescription.id
+              ? {
+                  ...item,
+                  analyzed: true,
+                }
+              : item
+        );
+
+      setPrescriptions(
+        updatedPrescriptions
+      );
+
+      savePrescriptions(
+        updatedPrescriptions
+      );
     } catch (error) {
-
       console.error(
         "Prescription analysis failed:",
         error
       );
 
-
       let message =
         "Could not analyze the prescription.";
-
 
       if (
         error?.message
       ) {
-
         message =
           error.message;
-
       }
-
 
       alert(
         `${message}\n\nPlease check your Gemini API configuration and try again.`
       );
-
-
     } finally {
-
       setAnalyzingId(null);
-
     }
   };
 
+  /* =======================================================
+     ADD ANALYZED MEDICINES
+  ======================================================= */
+
+  const addAnalyzedMedicines = (
+    prescription
+  ) => {
+    const result =
+      analysisResults[
+        prescription.id
+      ];
+
+    if (
+      !result ||
+      !Array.isArray(
+        result.medicines
+      ) ||
+      result.medicines.length === 0
+    ) {
+      alert(
+        "No medicines were extracted from this prescription."
+      );
+
+      return;
+    }
+
+    /*
+      Load the current Medicines
+      page data from localStorage.
+    */
+
+    const existingMedicines =
+      loadMedicines();
+
+    /*
+      Medicines already added from
+      this prescription.
+    */
+
+    const alreadyAdded =
+      Array.isArray(
+        prescription.addedMedicineNames
+      )
+        ? prescription.addedMedicineNames
+        : [];
+
+    const newMedicines = [];
+
+    const skippedMedicines = [];
+
+    result.medicines.forEach(
+      (medicine) => {
+        const medicineName =
+          String(
+            medicine?.name || ""
+          ).trim();
+
+        /*
+          Ignore empty medicine names.
+        */
+
+        if (!medicineName) {
+          return;
+        }
+
+        const normalizedName =
+          normalizeText(
+            medicineName
+          );
+
+        /*
+          Prevent adding the same
+          medicine twice.
+        */
+
+        const alreadyExists =
+          existingMedicines.some(
+            (existingMedicine) =>
+              normalizeText(
+                existingMedicine.name
+              ) ===
+              normalizedName
+          );
+
+        /*
+          Also prevent adding the
+          same medicine twice from
+          this prescription.
+        */
+
+        const alreadyAddedFromPrescription =
+          alreadyAdded.some(
+            (name) =>
+              normalizeText(name) ===
+              normalizedName
+          );
+
+        if (
+          alreadyExists ||
+          alreadyAddedFromPrescription
+        ) {
+          skippedMedicines.push(
+            medicineName
+          );
+
+          return;
+        }
+
+        /*
+          AI extracted fields.
+        */
+
+        const dosage =
+          String(
+            medicine.dosage || ""
+          ).trim();
+
+        const form =
+          String(
+            medicine.form ||
+              "Tablet"
+          ).trim();
+
+        const frequency =
+          String(
+            medicine.frequency ||
+              "Once daily"
+          ).trim();
+
+        /*
+          Make sure doseTimes
+          is always an array.
+        */
+
+        const doseTimes =
+          Array.isArray(
+            medicine.doseTimes
+          )
+            ? medicine.doseTimes.filter(
+                (time) =>
+                  String(
+                    time || ""
+                  ).trim()
+              )
+            : [];
+
+        const firstTime =
+          doseTimes[0] || "";
+
+        /*
+          Prescription dates.
+        */
+
+        const startDate =
+          medicine.startDate ||
+          result.prescriptionDate ||
+          "";
+
+        const endDate =
+          medicine.endDate ||
+          "";
+
+        /*
+          Quantity prescribed by
+          the doctor.
+        */
+
+        const prescribedQuantity =
+          Number(
+            medicine.prescribedQuantity
+          ) || 0;
+
+        /*
+          Important:
+          Initial stock is set to the
+          prescribed quantity because
+          this is the amount available
+          immediately after adding the
+          prescription.
+
+          The user can edit stock later.
+        */
+
+        const initialStock =
+          prescribedQuantity;
+
+        /*
+          Build the exact medicine
+          object expected by
+          Medicines.jsx.
+        */
+
+        const medicineData = {
+          id:
+            Date.now() +
+            Math.floor(
+              Math.random() *
+                100000
+            ),
+
+          name:
+            medicineName,
+
+          dosage:
+            dosage,
+
+          form:
+            form,
+
+          frequency:
+            frequency,
+
+          doseTimes:
+            doseTimes,
+
+          schedule:
+            getSchedule(
+              firstTime
+            ),
+
+          time:
+            formatTime(
+              firstTime
+            ),
+
+          /*
+            PRESCRIPTION
+          */
+
+          prescriptionStartDate:
+            startDate,
+
+          prescriptionEndDate:
+            endDate,
+
+          prescribedQuantity:
+            prescribedQuantity,
+
+          /*
+            INVENTORY
+          */
+
+          stock:
+            initialStock,
+
+          lowStockAlert:
+            3,
+
+          /*
+            OTHER
+          */
+
+          purpose:
+            "",
+
+          status:
+            "Active",
+
+          accentColor:
+            "Teal",
+
+          notes:
+            medicine.instructions ||
+            "",
+
+          instructions:
+            medicine.instructions ||
+            "",
+
+          /*
+            New medicines have
+            not been taken today.
+          */
+
+          taken:
+            false,
+
+          /*
+            Source information.
+            Useful later for traceability.
+          */
+
+          source:
+            "AI prescription analysis",
+
+          sourcePrescriptionId:
+            prescription.id,
+
+          sourcePrescriptionName:
+            prescription.name,
+        };
+
+        newMedicines.push(
+          medicineData
+        );
+      }
+    );
+
+    /*
+      If absolutely nothing can
+      be added, tell the user why.
+    */
+
+    if (
+      newMedicines.length === 0
+    ) {
+      if (
+        skippedMedicines.length > 0
+      ) {
+        alert(
+          "All extracted medicines are already in your Medicines section."
+        );
+      } else {
+        alert(
+          "No valid medicines could be added."
+        );
+      }
+
+      return;
+    }
+
+    /*
+      Combine existing medicines
+      with newly extracted medicines.
+    */
+
+    const updatedMedicines = [
+      ...existingMedicines,
+      ...newMedicines,
+    ];
+
+    /*
+      Save to the same localStorage
+      used by Medicines.jsx.
+    */
+
+    saveMedicines(
+      updatedMedicines
+    );
+
+    /*
+      Remember which medicines from
+      this prescription were added.
+    */
+
+    const addedNames = [
+      ...alreadyAdded,
+      ...newMedicines.map(
+        (medicine) =>
+          medicine.name
+      ),
+    ];
+
+    const updatedPrescriptions =
+      prescriptions.map(
+        (item) =>
+          item.id ===
+          prescription.id
+            ? {
+                ...item,
+
+                addedMedicineNames:
+                  addedNames,
+              }
+            : item
+      );
+
+    setPrescriptions(
+      updatedPrescriptions
+    );
+
+    savePrescriptions(
+      updatedPrescriptions
+    );
+
+    /*
+      Prepare confirmation message.
+    */
+
+    let message =
+      `${newMedicines.length} medicine${
+        newMedicines.length === 1
+          ? ""
+          : "s"
+      } added to Medicines successfully.`;
+
+    if (
+      skippedMedicines.length > 0
+    ) {
+      message +=
+        `\n\nAlready present or previously added:\n${skippedMedicines.join(
+          ", "
+        )}`;
+    }
+
+    alert(message);
+  };
 
   /* =======================================================
      RENDER
   ======================================================= */
 
   return (
-
     <div className="min-h-screen bg-[#08111F] text-white">
 
       <main
@@ -446,7 +970,6 @@ function Prescriptions() {
             PRESCRIPTION MANAGEMENT
           </p>
 
-
           <div
             className="
               flex
@@ -471,7 +994,6 @@ function Prescriptions() {
                 Prescriptions
               </h1>
 
-
               <p
                 className="
                   text-lg
@@ -486,7 +1008,6 @@ function Prescriptions() {
               </p>
 
             </div>
-
 
             {/* UPLOAD BUTTON */}
 
@@ -514,7 +1035,6 @@ function Prescriptions() {
 
               Upload Prescription
 
-
               <input
                 type="file"
                 accept=".pdf,image/png,image/jpeg,image/webp"
@@ -529,7 +1049,6 @@ function Prescriptions() {
           </div>
 
         </section>
-
 
         {/* =================================================
             AI INFORMATION
@@ -574,7 +1093,6 @@ function Prescriptions() {
 
             </div>
 
-
             <div>
 
               <h2
@@ -585,7 +1103,6 @@ function Prescriptions() {
               >
                 AI Prescription Analysis
               </h2>
-
 
               <p
                 className="
@@ -601,7 +1118,6 @@ function Prescriptions() {
                 instructions, and prescription dates
                 for your review.
               </p>
-
 
               <div
                 className="
@@ -650,7 +1166,6 @@ function Prescriptions() {
 
         </section>
 
-
         {/* =================================================
             PRESCRIPTIONS
         ================================================= */}
@@ -677,7 +1192,6 @@ function Prescriptions() {
                 Your prescriptions
               </h2>
 
-
               <p
                 className="
                   text-slate-500
@@ -688,7 +1202,6 @@ function Prescriptions() {
               </p>
 
             </div>
-
 
             <span
               className="
@@ -705,7 +1218,6 @@ function Prescriptions() {
             </span>
 
           </div>
-
 
           {prescriptions.length === 0 ? (
 
@@ -746,7 +1258,6 @@ function Prescriptions() {
 
               </div>
 
-
               <h3
                 className="
                   text-xl
@@ -755,7 +1266,6 @@ function Prescriptions() {
               >
                 No prescriptions yet
               </h3>
-
 
               <p
                 className="
@@ -788,22 +1298,54 @@ function Prescriptions() {
                       "image/"
                     );
 
-
                   const isAnalyzing =
                     analyzingId ===
                     prescription.id;
 
-
                   const isAnalyzed =
                     analyzedId ===
                     prescription.id;
-
 
                   const result =
                     analysisResults[
                       prescription.id
                     ];
 
+                  const addedMedicineNames =
+                    Array.isArray(
+                      prescription.addedMedicineNames
+                    )
+                      ? prescription.addedMedicineNames
+                      : [];
+
+                  const hasAddedMedicines =
+                    addedMedicineNames.length >
+                    0;
+
+                  const hasExtractedMedicines =
+                    result?.medicines?.length >
+                    0;
+
+                  /*
+                    Check whether every
+                    extracted medicine has
+                    already been added.
+                  */
+
+                  const allMedicinesAdded =
+                    hasExtractedMedicines &&
+                    result.medicines.every(
+                      (medicine) =>
+                        addedMedicineNames.some(
+                          (name) =>
+                            normalizeText(
+                              name
+                            ) ===
+                            normalizeText(
+                              medicine?.name
+                            )
+                        )
+                    );
 
                   return (
 
@@ -854,7 +1396,6 @@ function Prescriptions() {
 
                         </div>
 
-
                         <div
                           className="
                             flex-1
@@ -870,7 +1411,6 @@ function Prescriptions() {
                           >
                             {prescription.name}
                           </h3>
-
 
                           <p
                             className="
@@ -890,7 +1430,6 @@ function Prescriptions() {
                               : "PDF"}
                           </p>
 
-
                           <p
                             className="
                               text-xs
@@ -907,7 +1446,6 @@ function Prescriptions() {
                         </div>
 
                       </div>
-
 
                       {/* =================================================
                           ANALYSIS AREA
@@ -952,7 +1490,6 @@ function Prescriptions() {
 
                           </div>
 
-
                           <div
                             className="
                               flex-1
@@ -967,7 +1504,6 @@ function Prescriptions() {
                             >
                               Prescription analysis
                             </h4>
-
 
                             {isAnalyzed ? (
 
@@ -995,7 +1531,6 @@ function Prescriptions() {
 
                                 </div>
 
-
                                 {/* EXTRACTED MEDICINES */}
 
                                 {result?.medicines?.length > 0 ? (
@@ -1006,185 +1541,248 @@ function Prescriptions() {
                                       (
                                         medicine,
                                         index
-                                      ) => (
+                                      ) => {
 
-                                        <div
-                                          key={index}
-                                          className="
-                                            rounded-xl
-                                            border
-                                            border-white/10
-                                            bg-white/[0.03]
-                                            p-4
-                                          "
-                                        >
+                                        const isMedicineAdded =
+                                          addedMedicineNames.some(
+                                            (name) =>
+                                              normalizeText(
+                                                name
+                                              ) ===
+                                              normalizeText(
+                                                medicine?.name
+                                              )
+                                          );
+
+                                        return (
 
                                           <div
+                                            key={index}
                                             className="
-                                              flex
-                                              items-start
-                                              gap-3
+                                              rounded-xl
+                                              border
+                                              border-white/10
+                                              bg-white/[0.03]
+                                              p-4
                                             "
                                           >
 
                                             <div
                                               className="
-                                                w-9
-                                                h-9
-                                                rounded-lg
-                                                bg-cyan-400/10
                                                 flex
-                                                items-center
-                                                justify-center
-                                                shrink-0
+                                                items-start
+                                                gap-3
                                               "
                                             >
 
-                                              <Pill
-                                                size={17}
-                                                className="text-cyan-400"
-                                              />
-
-                                            </div>
-
-
-                                            <div
-                                              className="
-                                                min-w-0
-                                                flex-1
-                                              "
-                                            >
-
-                                              <p className="font-medium">
-
-                                                {medicine.name ||
-                                                  "Unknown medicine"}
-
-                                              </p>
-
-
-                                              <p
+                                              <div
                                                 className="
-                                                  text-xs
-                                                  text-slate-400
-                                                  mt-1
+                                                  w-9
+                                                  h-9
+                                                  rounded-lg
+                                                  bg-cyan-400/10
+                                                  flex
+                                                  items-center
+                                                  justify-center
+                                                  shrink-0
                                                 "
                                               >
 
-                                                {medicine.dosage ||
-                                                  "Dosage not specified"}
+                                                <Pill
+                                                  size={17}
+                                                  className="text-cyan-400"
+                                                />
 
-                                                {" · "}
+                                              </div>
 
-                                                {medicine.frequency ||
-                                                  "Frequency not specified"}
+                                              <div
+                                                className="
+                                                  min-w-0
+                                                  flex-1
+                                                "
+                                              >
 
-                                              </p>
-
-
-                                              {medicine.form && (
-
-                                                <p
+                                                <div
                                                   className="
-                                                    text-xs
-                                                    text-slate-500
-                                                    mt-1
-                                                  "
-                                                >
-                                                  Form:{" "}
-                                                  {medicine.form}
-                                                </p>
-
-                                              )}
-
-
-                                              {medicine.prescribedQuantity >
-                                                0 && (
-
-                                                <p
-                                                  className="
-                                                    text-xs
-                                                    text-slate-500
-                                                    mt-2
+                                                    flex
+                                                    items-center
+                                                    justify-between
+                                                    gap-3
                                                   "
                                                 >
 
-                                                  Quantity:{" "}
-                                                  {
-                                                    medicine.prescribedQuantity
-                                                  }
+                                                  <p className="font-medium">
 
-                                                </p>
+                                                    {medicine.name ||
+                                                      "Unknown medicine"}
 
-                                              )}
+                                                  </p>
 
+                                                  {isMedicineAdded && (
 
-                                              {medicine.startDate && (
+                                                    <span
+                                                      className="
+                                                        shrink-0
+                                                        inline-flex
+                                                        items-center
+                                                        gap-1
+                                                        px-2
+                                                        py-1
+                                                        rounded-full
+                                                        bg-emerald-400/10
+                                                        text-emerald-400
+                                                        text-[11px]
+                                                      "
+                                                    >
+
+                                                      <CheckCircle2
+                                                        size={12}
+                                                      />
+
+                                                      Added
+
+                                                    </span>
+
+                                                  )}
+
+                                                </div>
 
                                                 <p
                                                   className="
                                                     text-xs
-                                                    text-slate-500
-                                                    mt-1
-                                                  "
-                                                >
-
-                                                  Start:{" "}
-                                                  {
-                                                    medicine.startDate
-                                                  }
-
-                                                </p>
-
-                                              )}
-
-
-                                              {medicine.endDate && (
-
-                                                <p
-                                                  className="
-                                                    text-xs
-                                                    text-slate-500
+                                                    text-slate-400
                                                     mt-1
                                                   "
                                                 >
 
-                                                  End:{" "}
-                                                  {
-                                                    medicine.endDate
-                                                  }
+                                                  {medicine.dosage ||
+                                                    "Dosage not specified"}
+
+                                                  {" · "}
+
+                                                  {medicine.frequency ||
+                                                    "Frequency not specified"}
 
                                                 </p>
 
-                                              )}
+                                                {medicine.form && (
 
+                                                  <p
+                                                    className="
+                                                      text-xs
+                                                      text-slate-500
+                                                      mt-1
+                                                    "
+                                                  >
+                                                    Form:{" "}
+                                                    {medicine.form}
+                                                  </p>
 
-                                              {medicine.instructions && (
+                                                )}
 
-                                                <p
-                                                  className="
-                                                    text-xs
-                                                    text-slate-500
-                                                    mt-2
-                                                    leading-5
-                                                  "
-                                                >
+                                                {medicine.doseTimes?.length >
+                                                  0 && (
 
-                                                  {
-                                                    medicine.instructions
-                                                  }
+                                                  <p
+                                                    className="
+                                                      text-xs
+                                                      text-slate-500
+                                                      mt-1
+                                                    "
+                                                  >
+                                                    Dose times:{" "}
+                                                    {medicine.doseTimes.join(
+                                                      ", "
+                                                    )}
+                                                  </p>
 
-                                                </p>
+                                                )}
 
-                                              )}
+                                                {medicine.prescribedQuantity >
+                                                  0 && (
+
+                                                  <p
+                                                    className="
+                                                      text-xs
+                                                      text-slate-500
+                                                      mt-2
+                                                    "
+                                                  >
+
+                                                    Quantity:{" "}
+                                                    {
+                                                      medicine.prescribedQuantity
+                                                    }
+
+                                                  </p>
+
+                                                )}
+
+                                                {medicine.startDate && (
+
+                                                  <p
+                                                    className="
+                                                      text-xs
+                                                      text-slate-500
+                                                      mt-1
+                                                    "
+                                                  >
+
+                                                    Start:{" "}
+                                                    {
+                                                      medicine.startDate
+                                                    }
+
+                                                  </p>
+
+                                                )}
+
+                                                {medicine.endDate && (
+
+                                                  <p
+                                                    className="
+                                                      text-xs
+                                                      text-slate-500
+                                                      mt-1
+                                                    "
+                                                  >
+
+                                                    End:{" "}
+                                                    {
+                                                      medicine.endDate
+                                                    }
+
+                                                  </p>
+
+                                                )}
+
+                                                {medicine.instructions && (
+
+                                                  <p
+                                                    className="
+                                                      text-xs
+                                                      text-slate-500
+                                                      mt-2
+                                                      leading-5
+                                                    "
+                                                  >
+
+                                                    {
+                                                      medicine.instructions
+                                                    }
+
+                                                  </p>
+
+                                                )}
+
+                                              </div>
 
                                             </div>
 
                                           </div>
 
-                                        </div>
-
-                                      )
+                                        );
+                                      }
                                     )}
 
                                   </div>
@@ -1220,7 +1818,6 @@ function Prescriptions() {
 
                                 )}
 
-
                                 {/* DOCTOR / PATIENT INFO */}
 
                                 {(result?.doctorName ||
@@ -1250,7 +1847,6 @@ function Prescriptions() {
 
                                     )}
 
-
                                     {result.patientName && (
 
                                       <p className="text-xs text-slate-500">
@@ -1263,7 +1859,6 @@ function Prescriptions() {
                                       </p>
 
                                     )}
-
 
                                     {result.prescriptionDate && (
 
@@ -1283,7 +1878,6 @@ function Prescriptions() {
                                   </div>
 
                                 )}
-
 
                                 {/* NOTES */}
 
@@ -1342,7 +1936,6 @@ function Prescriptions() {
 
                         </div>
 
-
                         {/* =================================================
                             ANALYZE BUTTON
                         ================================================= */}
@@ -1393,8 +1986,74 @@ function Prescriptions() {
 
                         )}
 
-                      </div>
+                        {/* =================================================
+                            ADD TO MEDICINES
+                        ================================================= */}
 
+                        {isAnalyzed &&
+                          hasExtractedMedicines && (
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addAnalyzedMedicines(
+                                prescription
+                              )
+                            }
+                            disabled={
+                              allMedicinesAdded
+                            }
+                            className={`
+                              w-full
+                              mt-5
+                              inline-flex
+                              items-center
+                              justify-center
+                              gap-2
+                              px-5
+                              py-3
+                              rounded-xl
+                              font-semibold
+                              transition
+                              ${
+                                allMedicinesAdded
+                                  ? "bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 cursor-not-allowed"
+                                  : "bg-cyan-400 hover:bg-cyan-300 text-[#06111F]"
+                              }
+                            `}
+                          >
+
+                            {allMedicinesAdded ? (
+
+                              <>
+                                <CheckCircle2
+                                  size={17}
+                                />
+
+                                Medicines added
+
+                              </>
+
+                            ) : (
+
+                              <>
+                                <Pill
+                                  size={17}
+                                />
+
+                                {hasAddedMedicines
+                                  ? "Add remaining medicines"
+                                  : "Add to Medicines"}
+
+                              </>
+
+                            )}
+
+                          </button>
+
+                        )}
+
+                      </div>
 
                       {/* =================================================
                           ACTIONS
@@ -1441,12 +2100,10 @@ function Prescriptions() {
 
                         </button>
 
-
                         {isAnalyzed && (
 
                           <button
                             type="button"
-                            disabled
                             className="
                               inline-flex
                               items-center
@@ -1459,7 +2116,6 @@ function Prescriptions() {
                               border-emerald-400/20
                               text-sm
                               text-emerald-400
-                              cursor-not-allowed
                             "
                           >
 
@@ -1472,7 +2128,6 @@ function Prescriptions() {
                           </button>
 
                         )}
-
 
                         <button
                           type="button"
@@ -1505,7 +2160,6 @@ function Prescriptions() {
                       </div>
 
                     </div>
-
                   );
                 }
               )}
@@ -1515,7 +2169,6 @@ function Prescriptions() {
           )}
 
         </section>
-
 
         {/* =================================================
             WORKFLOW INFORMATION
@@ -1560,13 +2213,11 @@ function Prescriptions() {
 
             </div>
 
-
             <div>
 
               <h3 className="font-semibold">
                 Prescription workflow
               </h3>
-
 
               <p
                 className="
@@ -1576,11 +2227,11 @@ function Prescriptions() {
                   leading-6
                 "
               >
-                Uploaded prescriptions are analyzed
-                by AI and displayed for review. The
-                next step will allow you to confirm the
-                extracted information before it is added
-                to your medication schedule.
+                Upload a prescription, analyze it
+                with AI, review the extracted
+                information, and add the confirmed
+                medicines directly to your medication
+                management section.
               </p>
 
             </div>
@@ -1590,7 +2241,6 @@ function Prescriptions() {
         </section>
 
       </main>
-
 
       {/* ===================================================
           PREVIEW MODAL
@@ -1616,9 +2266,7 @@ function Prescriptions() {
               event.target ===
               event.currentTarget
             ) {
-
               setPreviewFile(null);
-
             }
 
           }}
@@ -1667,7 +2315,6 @@ function Prescriptions() {
 
               </div>
 
-
               <button
                 type="button"
                 onClick={() =>
@@ -1693,7 +2340,6 @@ function Prescriptions() {
               </button>
 
             </div>
-
 
             {/* PREVIEW */}
 
