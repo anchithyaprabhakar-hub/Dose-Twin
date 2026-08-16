@@ -1,214 +1,370 @@
 import { GoogleGenAI } from "@google/genai";
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+  console.warn(
+    "VITE_GEMINI_API_KEY is not configured."
+  );
+}
 
 const ai = new GoogleGenAI({
-  apiKey: API_KEY,
+  apiKey,
 });
 
-const STORAGE_KEY = "dosetwin_medicines";
 
 /* =========================================================
-   GET MEDICINES
+   GEMINI MODEL
 ========================================================= */
 
-function getMedicines() {
+const MODEL = "gemini-3.6-flash";
+
+
+/* =========================================================
+   TEXT GENERATION
+========================================================= */
+
+export async function askGemini(prompt) {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-
-    if (!stored) {
-      return [];
-    }
-
-    const parsed = JSON.parse(stored);
-
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Medicine data error:", error);
-    return [];
-  }
-}
-
-
-/* =========================================================
-   BUILD DOSETWIN CONTEXT
-========================================================= */
-
-function buildDoseTwinContext() {
-  const medicines = getMedicines();
-
-  if (medicines.length === 0) {
-    return `
-DOSETWIN MEDICATION DATA:
-
-The user currently has no medicines stored.
-
-Do not invent any medicines or medication information.
-`;
-  }
-
-  const takenCount = medicines.filter(
-    (medicine) => medicine.taken
-  ).length;
-
-  const adherence = Math.round(
-    (takenCount / medicines.length) * 100
-  );
-
-  const medicationList = medicines
-    .map(
-      (medicine, index) => `
-Medicine ${index + 1}:
-Name: ${medicine.name || "Not specified"}
-Dosage: ${medicine.dosage || "Not specified"}
-Schedule: ${medicine.schedule || "Not specified"}
-Time: ${medicine.time || "Not specified"}
-Instructions: ${
-        medicine.instructions || "Not specified"
-      }
-Status: ${medicine.taken ? "Taken" : "Pending"}
-`
-    )
-    .join("\n");
-
-  return `
-DOSETWIN MEDICATION DATA
-
-${medicationList}
-
-ADHERENCE:
-
-${takenCount} of ${medicines.length} medicines
-are marked as taken today.
-
-Current adherence: ${adherence}%
-
-RULES:
-
-- Use the medication data above when answering medication questions.
-- Never invent medicines.
-- Never change a dosage.
-- Never change a schedule.
-- If information is unavailable, say so.
-- Do not diagnose medical conditions.
-- For serious medical concerns, recommend consulting a qualified healthcare professional.
-`;
-}
-
-
-/* =========================================================
-   ASK GEMINI
-========================================================= */
-
-export async function askGemini(userPrompt) {
-  try {
-
-    if (!API_KEY) {
-      console.error(
-        "VITE_GEMINI_API_KEY is missing."
-      );
-
-      return `
-DoseTwin AI is not configured correctly.
-
-Please check your VITE_GEMINI_API_KEY in the .env file and restart the Vite server.
-`;
-    }
-
-
-    const medicationContext =
-      buildDoseTwinContext();
-
-
-    const prompt = `
-You are DoseTwin AI.
-
-You are an intelligent medication-aware assistant
-inside the DoseTwin Smart Medication Platform.
-
-${medicationContext}
-
-USER QUESTION:
-
-${userPrompt}
-
-ANSWERING RULES:
-
-1. Answer the user's question directly.
-2. Use their DoseTwin medication data when relevant.
-3. Keep the answer clear and concise.
-4. Never invent medication information.
-5. Never modify medication dosage or schedule.
-6. Do not claim to be a doctor.
-7. If the user asks about their current medicines, use the exact medicines provided above.
-8. If there is no medication data, clearly say that no medication data is available.
-`;
-
-
     const response =
       await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: MODEL,
         contents: prompt,
       });
 
-
-    return response.text;
+    return response.text || "";
 
   } catch (error) {
 
     console.error(
-      "DOSETWIN GEMINI ERROR:",
+      "Gemini API error:",
       error
     );
 
-
-    const message =
-      error?.message || "";
-
-
-    if (
-      message.includes("API key")
-      ||
-      message.includes("401")
-      ||
-      message.includes("403")
-    ) {
-      return `
-DoseTwin AI could not authenticate with Gemini.
-
-Please check your Gemini API key.
-`;
-    }
-
-
-    if (
-      message.includes("429")
-    ) {
-      return `
-DoseTwin AI has reached the current API usage limit.
-
-Please try again later.
-`;
-    }
-
-
-    if (
-      message.includes("404")
-      ||
-      message.includes("model")
-    ) {
-      return `
-The Gemini model is currently unavailable.
-
-Please try again later.
-`;
-    }
-
-
-    return `
-DoseTwin AI could not connect to Gemini.
-
-Please check the browser console for the exact error.
-`;
+    throw error;
   }
 }
+
+
+/* =========================================================
+   PRESCRIPTION SCHEMA
+========================================================= */
+
+const prescriptionSchema = {
+  type: "object",
+
+  properties: {
+
+    medicines: {
+      type: "array",
+
+      items: {
+        type: "object",
+
+        properties: {
+
+          name: {
+            type: "string"
+          },
+
+          dosage: {
+            type: "string"
+          },
+
+          form: {
+            type: "string"
+          },
+
+          frequency: {
+            type: "string"
+          },
+
+          doseTimes: {
+            type: "array",
+
+            items: {
+              type: "string"
+            }
+          },
+
+          prescribedQuantity: {
+            type: "integer"
+          },
+
+          startDate: {
+            type: "string"
+          },
+
+          endDate: {
+            type: "string"
+          },
+
+          instructions: {
+            type: "string"
+          }
+
+        },
+
+        required: [
+          "name",
+          "dosage",
+          "form",
+          "frequency",
+          "doseTimes",
+          "prescribedQuantity",
+          "startDate",
+          "endDate",
+          "instructions"
+        ]
+      }
+    },
+
+    doctorName: {
+      type: "string"
+    },
+
+    patientName: {
+      type: "string"
+    },
+
+    prescriptionDate: {
+      type: "string"
+    },
+
+    notes: {
+      type: "string"
+    }
+
+  },
+
+  required: [
+    "medicines",
+    "doctorName",
+    "patientName",
+    "prescriptionDate",
+    "notes"
+  ]
+};
+
+
+/* =========================================================
+   PRESCRIPTION PROMPT
+========================================================= */
+
+const prescriptionPrompt = `
+You are DoseTwin's prescription
+information extraction system.
+
+Analyze the attached prescription document.
+
+Extract ONLY information that is
+clearly visible or explicitly stated.
+
+This is an information extraction task.
+
+DO NOT:
+
+- diagnose the patient
+- recommend medicines
+- change the prescription
+- invent missing information
+- infer medical information that is not written
+- alter dosage instructions
+
+Extract the following:
+
+- medicine name
+- dosage
+- medicine form
+- frequency
+- exact dose times
+- prescribed quantity
+- start date
+- end date
+- instructions
+- doctor name
+- patient name
+- prescription date
+- other relevant notes
+
+Rules:
+
+1. Keep medicine names exactly as written
+   whenever possible.
+
+2. Preserve dosage units such as:
+   mg
+   mcg
+   g
+   mL
+   IU
+
+3. Convert clearly stated frequencies into
+   readable values such as:
+
+   Once daily
+   Twice daily
+   Three times daily
+   Four times daily
+   As needed
+
+4. If exact dose times are explicitly written,
+   return them in HH:MM format.
+
+5. If exact dose times are not written,
+   return an empty array.
+
+6. If prescribed quantity is unavailable,
+   return 0.
+
+7. If information is unavailable,
+   return an empty string.
+
+8. Never invent missing information.
+
+9. Preserve the doctor's instructions.
+
+10. If the document is unclear or unreadable,
+    leave the uncertain field empty.
+
+Return ONLY the requested JSON structure.
+`;
+
+
+/* =========================================================
+   ANALYZE PRESCRIPTION FILE
+========================================================= */
+
+export async function analyzePrescription(
+  prescriptionFile
+) {
+
+  try {
+
+    if (!prescriptionFile) {
+      throw new Error(
+        "No prescription file was provided."
+      );
+    }
+
+
+    if (!prescriptionFile.data) {
+      throw new Error(
+        "Prescription file data is missing."
+      );
+    }
+
+
+    if (!prescriptionFile.type) {
+      throw new Error(
+        "Prescription file type is missing."
+      );
+    }
+
+
+    /*
+      The uploaded file is stored by
+      Prescriptions.jsx as:
+
+      data:image/jpeg;base64,AAAA...
+
+      or
+
+      data:application/pdf;base64,AAAA...
+    */
+
+    const dataUrl =
+      prescriptionFile.data;
+
+
+    const commaIndex =
+      dataUrl.indexOf(",");
+
+
+    if (commaIndex === -1) {
+      throw new Error(
+        "Invalid prescription file data."
+      );
+    }
+
+
+    /*
+      Extract only the Base64 portion.
+    */
+
+    const base64Data =
+      dataUrl.substring(
+        commaIndex + 1
+      );
+
+
+    /*
+      Send the actual prescription file
+      to Gemini.
+    */
+
+    const response =
+      await ai.models.generateContent({
+
+        model: MODEL,
+
+        contents: [
+
+          {
+            inlineData: {
+              mimeType:
+                prescriptionFile.type,
+
+              data:
+                base64Data
+            }
+          },
+
+          {
+            text:
+              prescriptionPrompt
+          }
+
+        ],
+
+        config: {
+
+          responseMimeType:
+            "application/json",
+
+          responseSchema:
+            prescriptionSchema
+
+        }
+
+      });
+
+
+    const text =
+      response.text || "{}";
+
+
+    const result =
+      JSON.parse(text);
+
+
+    return result;
+
+
+  } catch (error) {
+
+    console.error(
+      "Prescription analysis error:",
+      error
+    );
+
+    throw error;
+  }
+}
+
+
+/* =========================================================
+   DEFAULT EXPORT
+========================================================= */
+
+export default ai;
