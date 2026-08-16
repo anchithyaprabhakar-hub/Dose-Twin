@@ -12,6 +12,10 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  analyzePrescription as analyzePrescriptionFile,
+} from "../gemini";
+
 const STORAGE_KEY = "dosetwin_prescriptions";
 
 
@@ -92,6 +96,12 @@ function Prescriptions() {
   ] = useState(null);
 
 
+  const [
+    analysisResults,
+    setAnalysisResults,
+  ] = useState({});
+
+
   /* =======================================================
      UPLOAD
   ======================================================= */
@@ -107,15 +117,6 @@ function Prescriptions() {
       return;
     }
 
-
-    /*
-      Supported formats:
-      PDF
-      PNG
-      JPG
-      JPEG
-      WEBP
-    */
 
     const allowedTypes = [
       "application/pdf",
@@ -142,7 +143,8 @@ function Prescriptions() {
 
 
     /*
-      Limit file size to 10 MB.
+      Maximum file size:
+      10 MB
     */
 
     if (
@@ -207,8 +209,8 @@ function Prescriptions() {
 
 
     /*
-      Allows the same file to be
-      uploaded again later.
+      Allow the same file to be
+      uploaded again.
     */
 
     event.target.value = "";
@@ -262,6 +264,20 @@ function Prescriptions() {
     ) {
       setAnalyzedId(null);
     }
+
+
+    setAnalysisResults(
+      (previous) => {
+
+        const updatedResults = {
+          ...previous,
+        };
+
+        delete updatedResults[id];
+
+        return updatedResults;
+      }
+    );
   };
 
 
@@ -306,44 +322,92 @@ function Prescriptions() {
      ANALYZE PRESCRIPTION
   ======================================================= */
 
-  const analyzePrescription = (
+  const analyzePrescription = async (
     prescription
   ) => {
 
-    /*
-      IMPORTANT:
+    try {
 
-      This is intentionally NOT fake AI.
+      setAnalyzingId(
+        prescription.id
+      );
 
-      We are only preparing the UI and
-      application flow here.
-
-      Gemini/OCR will be connected in
-      the next step.
-    */
-
-    setAnalyzingId(
-      prescription.id
-    );
+      setAnalyzedId(null);
 
 
-    /*
-      Temporary delay so the interface
-      behaves like an analysis process.
+      /*
+        Send the actual uploaded
+        PDF/image to Gemini.
+      */
 
-      This will be replaced by the
-      real AI request.
-    */
+      const result =
+        await analyzePrescriptionFile(
+          prescription
+        );
 
-    setTimeout(() => {
 
-      setAnalyzingId(null);
+      console.log(
+        "Gemini prescription result:",
+        result
+      );
+
+
+      /*
+        Store extracted result
+        against this prescription.
+      */
+
+      setAnalysisResults(
+        (previous) => ({
+          ...previous,
+
+          [prescription.id]:
+            result,
+        })
+      );
+
+
+      /*
+        Mark analysis complete.
+      */
 
       setAnalyzedId(
         prescription.id
       );
 
-    }, 1000);
+
+    } catch (error) {
+
+      console.error(
+        "Prescription analysis failed:",
+        error
+      );
+
+
+      let message =
+        "Could not analyze the prescription.";
+
+
+      if (
+        error?.message
+      ) {
+
+        message =
+          error.message;
+
+      }
+
+
+      alert(
+        `${message}\n\nPlease check your Gemini API configuration and try again.`
+      );
+
+
+    } finally {
+
+      setAnalyzingId(null);
+
+    }
   };
 
 
@@ -531,11 +595,11 @@ function Prescriptions() {
                   leading-6
                 "
               >
-                DoseTwin will eventually read
-                the uploaded prescription and
-                identify medicines, dosage,
-                frequency, timing, quantity,
-                and prescription dates.
+                DoseTwin can analyze uploaded
+                prescriptions and extract medicine,
+                dosage, frequency, timing, quantity,
+                instructions, and prescription dates
+                for your review.
               </p>
 
 
@@ -548,100 +612,35 @@ function Prescriptions() {
                 "
               >
 
-                <span
-                  className="
-                    px-3
-                    py-1.5
-                    rounded-lg
-                    bg-white/5
-                    border
-                    border-white/10
-                    text-xs
-                    text-slate-400
-                  "
-                >
-                  Medicine
-                </span>
+                {[
+                  "Medicine",
+                  "Dosage",
+                  "Frequency",
+                  "Schedule",
+                  "Quantity",
+                  "Dates",
+                  "Instructions",
+                ].map(
+                  (item) => (
 
+                    <span
+                      key={item}
+                      className="
+                        px-3
+                        py-1.5
+                        rounded-lg
+                        bg-white/5
+                        border
+                        border-white/10
+                        text-xs
+                        text-slate-400
+                      "
+                    >
+                      {item}
+                    </span>
 
-                <span
-                  className="
-                    px-3
-                    py-1.5
-                    rounded-lg
-                    bg-white/5
-                    border
-                    border-white/10
-                    text-xs
-                    text-slate-400
-                  "
-                >
-                  Dosage
-                </span>
-
-
-                <span
-                  className="
-                    px-3
-                    py-1.5
-                    rounded-lg
-                    bg-white/5
-                    border
-                    border-white/10
-                    text-xs
-                    text-slate-400
-                  "
-                >
-                  Frequency
-                </span>
-
-
-                <span
-                  className="
-                    px-3
-                    py-1.5
-                    rounded-lg
-                    bg-white/5
-                    border
-                    border-white/10
-                    text-xs
-                    text-slate-400
-                  "
-                >
-                  Schedule
-                </span>
-
-
-                <span
-                  className="
-                    px-3
-                    py-1.5
-                    rounded-lg
-                    bg-white/5
-                    border
-                    border-white/10
-                    text-xs
-                    text-slate-400
-                  "
-                >
-                  Quantity
-                </span>
-
-
-                <span
-                  className="
-                    px-3
-                    py-1.5
-                    rounded-lg
-                    bg-white/5
-                    border
-                    border-white/10
-                    text-xs
-                    text-slate-400
-                  "
-                >
-                  Dates
-                </span>
+                  )
+                )}
 
               </div>
 
@@ -699,8 +698,7 @@ function Prescriptions() {
             >
               {prescriptions.length}{" "}
 
-              {prescriptions.length ===
-              1
+              {prescriptions.length === 1
                 ? "document"
                 : "documents"}
 
@@ -709,10 +707,11 @@ function Prescriptions() {
           </div>
 
 
-          {prescriptions.length ===
-          0 ? (
+          {prescriptions.length === 0 ? (
 
-            /* EMPTY STATE */
+            /* =================================================
+               EMPTY STATE
+            ================================================= */
 
             <div
               className="
@@ -800,6 +799,12 @@ function Prescriptions() {
                     prescription.id;
 
 
+                  const result =
+                    analysisResults[
+                      prescription.id
+                    ];
+
+
                   return (
 
                     <div
@@ -817,7 +822,9 @@ function Prescriptions() {
                       "
                     >
 
-                      {/* FILE HEADER */}
+                      {/* =================================================
+                          FILE HEADER
+                      ================================================= */}
 
                       <div
                         className="
@@ -902,7 +909,9 @@ function Prescriptions() {
                       </div>
 
 
-                      {/* ANALYSIS AREA */}
+                      {/* =================================================
+                          ANALYSIS AREA
+                      ================================================= */}
 
                       <div
                         className="
@@ -962,27 +971,353 @@ function Prescriptions() {
 
                             {isAnalyzed ? (
 
-                              <div
-                                className="
-                                  mt-3
-                                  flex
-                                  items-start
-                                  gap-2
-                                  text-sm
-                                  text-amber-400
-                                "
-                              >
+                              <div className="mt-4">
 
-                                <AlertCircle
-                                  size={17}
-                                  className="shrink-0 mt-0.5"
-                                />
+                                {/* SUCCESS */}
 
-                                <p>
-                                  AI extraction
-                                  will be connected
-                                  in the next step.
-                                </p>
+                                <div
+                                  className="
+                                    flex
+                                    items-center
+                                    gap-2
+                                    text-emerald-400
+                                    text-sm
+                                    mb-4
+                                  "
+                                >
+
+                                  <CheckCircle2
+                                    size={17}
+                                  />
+
+                                  Prescription analyzed
+                                  successfully
+
+                                </div>
+
+
+                                {/* EXTRACTED MEDICINES */}
+
+                                {result?.medicines?.length > 0 ? (
+
+                                  <div className="space-y-3">
+
+                                    {result.medicines.map(
+                                      (
+                                        medicine,
+                                        index
+                                      ) => (
+
+                                        <div
+                                          key={index}
+                                          className="
+                                            rounded-xl
+                                            border
+                                            border-white/10
+                                            bg-white/[0.03]
+                                            p-4
+                                          "
+                                        >
+
+                                          <div
+                                            className="
+                                              flex
+                                              items-start
+                                              gap-3
+                                            "
+                                          >
+
+                                            <div
+                                              className="
+                                                w-9
+                                                h-9
+                                                rounded-lg
+                                                bg-cyan-400/10
+                                                flex
+                                                items-center
+                                                justify-center
+                                                shrink-0
+                                              "
+                                            >
+
+                                              <Pill
+                                                size={17}
+                                                className="text-cyan-400"
+                                              />
+
+                                            </div>
+
+
+                                            <div
+                                              className="
+                                                min-w-0
+                                                flex-1
+                                              "
+                                            >
+
+                                              <p className="font-medium">
+
+                                                {medicine.name ||
+                                                  "Unknown medicine"}
+
+                                              </p>
+
+
+                                              <p
+                                                className="
+                                                  text-xs
+                                                  text-slate-400
+                                                  mt-1
+                                                "
+                                              >
+
+                                                {medicine.dosage ||
+                                                  "Dosage not specified"}
+
+                                                {" · "}
+
+                                                {medicine.frequency ||
+                                                  "Frequency not specified"}
+
+                                              </p>
+
+
+                                              {medicine.form && (
+
+                                                <p
+                                                  className="
+                                                    text-xs
+                                                    text-slate-500
+                                                    mt-1
+                                                  "
+                                                >
+                                                  Form:{" "}
+                                                  {medicine.form}
+                                                </p>
+
+                                              )}
+
+
+                                              {medicine.prescribedQuantity >
+                                                0 && (
+
+                                                <p
+                                                  className="
+                                                    text-xs
+                                                    text-slate-500
+                                                    mt-2
+                                                  "
+                                                >
+
+                                                  Quantity:{" "}
+                                                  {
+                                                    medicine.prescribedQuantity
+                                                  }
+
+                                                </p>
+
+                                              )}
+
+
+                                              {medicine.startDate && (
+
+                                                <p
+                                                  className="
+                                                    text-xs
+                                                    text-slate-500
+                                                    mt-1
+                                                  "
+                                                >
+
+                                                  Start:{" "}
+                                                  {
+                                                    medicine.startDate
+                                                  }
+
+                                                </p>
+
+                                              )}
+
+
+                                              {medicine.endDate && (
+
+                                                <p
+                                                  className="
+                                                    text-xs
+                                                    text-slate-500
+                                                    mt-1
+                                                  "
+                                                >
+
+                                                  End:{" "}
+                                                  {
+                                                    medicine.endDate
+                                                  }
+
+                                                </p>
+
+                                              )}
+
+
+                                              {medicine.instructions && (
+
+                                                <p
+                                                  className="
+                                                    text-xs
+                                                    text-slate-500
+                                                    mt-2
+                                                    leading-5
+                                                  "
+                                                >
+
+                                                  {
+                                                    medicine.instructions
+                                                  }
+
+                                                </p>
+
+                                              )}
+
+                                            </div>
+
+                                          </div>
+
+                                        </div>
+
+                                      )
+                                    )}
+
+                                  </div>
+
+                                ) : (
+
+                                  <div
+                                    className="
+                                      flex
+                                      items-start
+                                      gap-2
+                                      text-sm
+                                      text-amber-400
+                                    "
+                                  >
+
+                                    <AlertCircle
+                                      size={17}
+                                      className="
+                                        shrink-0
+                                        mt-0.5
+                                      "
+                                    />
+
+                                    <p>
+                                      No medicines could
+                                      be confidently
+                                      extracted from this
+                                      prescription.
+                                    </p>
+
+                                  </div>
+
+                                )}
+
+
+                                {/* DOCTOR / PATIENT INFO */}
+
+                                {(result?.doctorName ||
+                                  result?.patientName ||
+                                  result?.prescriptionDate) && (
+
+                                  <div
+                                    className="
+                                      mt-4
+                                      pt-4
+                                      border-t
+                                      border-white/10
+                                      space-y-2
+                                    "
+                                  >
+
+                                    {result.doctorName && (
+
+                                      <p className="text-xs text-slate-500">
+
+                                        Doctor:{" "}
+                                        <span className="text-slate-300">
+                                          {result.doctorName}
+                                        </span>
+
+                                      </p>
+
+                                    )}
+
+
+                                    {result.patientName && (
+
+                                      <p className="text-xs text-slate-500">
+
+                                        Patient:{" "}
+                                        <span className="text-slate-300">
+                                          {result.patientName}
+                                        </span>
+
+                                      </p>
+
+                                    )}
+
+
+                                    {result.prescriptionDate && (
+
+                                      <p className="text-xs text-slate-500">
+
+                                        Prescription date:{" "}
+                                        <span className="text-slate-300">
+                                          {
+                                            result.prescriptionDate
+                                          }
+                                        </span>
+
+                                      </p>
+
+                                    )}
+
+                                  </div>
+
+                                )}
+
+
+                                {/* NOTES */}
+
+                                {result?.notes && (
+
+                                  <div
+                                    className="
+                                      mt-4
+                                      rounded-lg
+                                      bg-white/[0.03]
+                                      border
+                                      border-white/5
+                                      p-3
+                                    "
+                                  >
+
+                                    <p className="text-xs text-slate-500">
+                                      Notes
+                                    </p>
+
+                                    <p
+                                      className="
+                                        text-xs
+                                        text-slate-400
+                                        mt-1
+                                        leading-5
+                                      "
+                                    >
+                                      {result.notes}
+                                    </p>
+
+                                  </div>
+
+                                )}
 
                               </div>
 
@@ -997,8 +1332,8 @@ function Prescriptions() {
                                 "
                               >
                                 Analyze this prescription
-                                to extract medication
-                                information.
+                                with Gemini to extract
+                                medication information.
                               </p>
 
                             )}
@@ -1008,7 +1343,9 @@ function Prescriptions() {
                         </div>
 
 
-                        {/* ANALYZE BUTTON */}
+                        {/* =================================================
+                            ANALYZE BUTTON
+                        ================================================= */}
 
                         {!isAnalyzed && (
 
@@ -1049,7 +1386,7 @@ function Prescriptions() {
                             />
 
                             {isAnalyzing
-                              ? "Preparing analysis..."
+                              ? "Analyzing prescription..."
                               : "Analyze Prescription"}
 
                           </button>
@@ -1059,7 +1396,9 @@ function Prescriptions() {
                       </div>
 
 
-                      {/* ACTIONS */}
+                      {/* =================================================
+                          ACTIONS
+                      ================================================= */}
 
                       <div
                         className="
@@ -1179,7 +1518,7 @@ function Prescriptions() {
 
 
         {/* =================================================
-            FUTURE WORKFLOW
+            WORKFLOW INFORMATION
         ================================================= */}
 
         <section
@@ -1224,12 +1563,8 @@ function Prescriptions() {
 
             <div>
 
-              <h3
-                className="
-                  font-semibold
-                "
-              >
-                Next step
+              <h3 className="font-semibold">
+                Prescription workflow
               </h3>
 
 
@@ -1241,9 +1576,10 @@ function Prescriptions() {
                   leading-6
                 "
               >
-                Once prescription analysis is
-                connected, extracted medicines will
-                be reviewed here before being added
+                Uploaded prescriptions are analyzed
+                by AI and displayed for review. The
+                next step will allow you to confirm the
+                extracted information before it is added
                 to your medication schedule.
               </p>
 
@@ -1318,11 +1654,7 @@ function Prescriptions() {
               "
             >
 
-              <div
-                className="
-                  min-w-0
-                "
-              >
+              <div className="min-w-0">
 
                 <h2
                   className="
