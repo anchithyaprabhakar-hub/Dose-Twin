@@ -17,91 +17,32 @@ const MEDICINE_EVENT = "dosetwin-medicines-updated";
 
 /* =========================================================
    DEFAULT DATA
+
+   IMPORTANT:
+   There are NO permanent dummy medicines.
+
+   Medicines exist only when the user creates a prescription.
 ========================================================= */
 
-const defaultMedicines = [
-  {
-    id: 1,
-    name: "Metformin",
-    dosage: "500 mg",
-    form: "Tablet",
-    frequency: "Once daily",
-    schedule: "Morning",
-    time: "8:00 AM",
-    doseTimes: ["08:00"],
+const defaultMedicines = [];
 
-    /* PRESCRIPTION */
+/* =========================================================
+   DATE HELPERS
+========================================================= */
 
-    prescriptionStartDate: "",
-    prescriptionEndDate: "",
-    prescribedQuantity: 30,
+function getTodayKey() {
+  const today = new Date();
 
-    /* CURRENT INVENTORY */
+  const year = today.getFullYear();
+  const month = String(
+    today.getMonth() + 1
+  ).padStart(2, "0");
+  const day = String(
+    today.getDate()
+  ).padStart(2, "0");
 
-    stock: 30,
-
-    lowStockAlert: 3,
-
-    purpose: "",
-    status: "Active",
-    accentColor: "Teal",
-    notes: "Take after breakfast",
-    instructions: "Take after breakfast",
-    taken: true,
-  },
-
-  {
-    id: 2,
-    name: "Omega 3",
-    dosage: "1000 mg",
-    form: "Capsule",
-    frequency: "Once daily",
-    schedule: "Afternoon",
-    time: "1:00 PM",
-    doseTimes: ["13:00"],
-
-    prescriptionStartDate: "",
-    prescriptionEndDate: "",
-    prescribedQuantity: 20,
-
-    stock: 20,
-
-    lowStockAlert: 3,
-
-    purpose: "",
-    status: "Active",
-    accentColor: "Purple",
-    notes: "Take with food",
-    instructions: "Take with food",
-    taken: true,
-  },
-
-  {
-    id: 3,
-    name: "Vitamin D",
-    dosage: "1000 IU",
-    form: "Tablet",
-    frequency: "Once daily",
-    schedule: "Evening",
-    time: "7:30 PM",
-    doseTimes: ["19:30"],
-
-    prescriptionStartDate: "",
-    prescriptionEndDate: "",
-    prescribedQuantity: 30,
-
-    stock: 30,
-
-    lowStockAlert: 3,
-
-    purpose: "",
-    status: "Active",
-    accentColor: "Orange",
-    notes: "Take after dinner",
-    instructions: "Take after dinner",
-    taken: true,
-  },
-];
+  return `${year}-${month}-${day}`;
+}
 
 /* =========================================================
    LOAD MEDICINES
@@ -109,22 +50,29 @@ const defaultMedicines = [
 
 function loadMedicines() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored =
+      localStorage.getItem(STORAGE_KEY);
 
     if (!stored) {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(defaultMedicines)
-      );
-
       return defaultMedicines;
     }
 
     const parsed = JSON.parse(stored);
 
-    return Array.isArray(parsed)
-      ? parsed
-      : defaultMedicines;
+    if (!Array.isArray(parsed)) {
+      return defaultMedicines;
+    }
+
+    /*
+      Normalize older medicine records so
+      old localStorage data does not break
+      the new prescription model.
+    */
+
+    return parsed.map(
+      (medicine) =>
+        normalizeMedicine(medicine)
+    );
   } catch (error) {
     console.error(
       "Could not load medicines:",
@@ -151,6 +99,154 @@ function saveMedicines(medicines) {
 }
 
 /* =========================================================
+   NORMALIZE MEDICINE
+
+   Keeps older localStorage data compatible
+   with the new model.
+========================================================= */
+
+function normalizeMedicine(
+  medicine
+) {
+  const doseTimes =
+    Array.isArray(
+      medicine.doseTimes
+    )
+      ? medicine.doseTimes.filter(
+          Boolean
+        )
+      : medicine.time
+      ? [convertDisplayTimeTo24Hour(medicine.time)]
+      : [];
+
+  return {
+    ...medicine,
+
+    id:
+      medicine.id ??
+      Date.now(),
+
+    name:
+      medicine.name || "",
+
+    dosage:
+      medicine.dosage || "",
+
+    form:
+      medicine.form || "Tablet",
+
+    doseTimes,
+
+    prescriptionStartDate:
+      medicine.prescriptionStartDate ||
+      "",
+
+    prescriptionEndDate:
+      medicine.prescriptionEndDate ||
+      "",
+
+    prescribedQuantity:
+      Number(
+        medicine.prescribedQuantity
+      ) || 0,
+
+    stock:
+      Number(medicine.stock) || 0,
+
+    lowStockAlert:
+      Number(
+        medicine.lowStockAlert
+      ) || 3,
+
+    purpose:
+      medicine.purpose || "",
+
+    status:
+      medicine.status || "Active",
+
+    accentColor:
+      medicine.accentColor ||
+      "Teal",
+
+    notes:
+      medicine.notes ||
+      medicine.instructions ||
+      "",
+
+    /*
+      New dose-level tracking.
+
+      Example:
+
+      doseTaken: {
+        "2026-08-18": {
+          "08:00": true,
+          "20:00": false
+        }
+      }
+    */
+
+    doseTaken:
+      medicine.doseTaken &&
+      typeof medicine.doseTaken ===
+        "object"
+        ? medicine.doseTaken
+        : {},
+
+    /*
+      Keep old taken field for
+      backwards compatibility,
+      but it is no longer the
+      source of truth.
+    */
+
+    taken:
+      Boolean(medicine.taken),
+  };
+}
+
+/* =========================================================
+   CONVERT DISPLAY TIME → 24 HOUR TIME
+========================================================= */
+
+function convertDisplayTimeTo24Hour(
+  displayTime
+) {
+  if (!displayTime) {
+    return "";
+  }
+
+  const match =
+    displayTime.match(
+      /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  let hour = Number(match[1]);
+
+  const minutes = match[2];
+
+  const period =
+    match[3].toUpperCase();
+
+  if (period === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (period === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  return `${String(hour).padStart(
+    2,
+    "0"
+  )}:${minutes}`;
+}
+
+/* =========================================================
    EMPTY FORM
 ========================================================= */
 
@@ -158,7 +254,6 @@ const emptyForm = {
   name: "",
   dosage: "",
   form: "Tablet",
-  frequency: "Once daily",
 
   doseTimes: [""],
 
@@ -176,42 +271,157 @@ const emptyForm = {
 };
 
 /* =========================================================
-   FREQUENCY → DAILY DOSE COUNT
+   FORMAT TIME
 ========================================================= */
 
-function getDailyDoseCount(frequency) {
-  switch (frequency) {
-    case "Once daily":
-      return 1;
+function formatTime(time) {
+  if (!time) {
+    return "";
+  }
 
-    case "Twice daily":
-      return 2;
+  const [hours, minutes] =
+    time.split(":");
 
-    case "Three times daily":
-      return 3;
+  let hour = Number(hours);
 
-    case "Four times daily":
-      return 4;
+  const period =
+    hour >= 12 ? "PM" : "AM";
 
-    case "Every other day":
-      return 0.5;
+  hour = hour % 12 || 12;
 
-    case "Weekly":
-      return 1 / 7;
+  return `${hour}:${minutes} ${period}`;
+}
 
-    case "As needed":
-      return 0;
+/* =========================================================
+   GET SCHEDULE LABEL
+
+   Actual schedule comes from doseTimes.
+========================================================= */
+
+function getSchedule(time) {
+  if (!time) {
+    return "Not set";
+  }
+
+  const hour = Number(
+    time.split(":")[0]
+  );
+
+  if (hour >= 5 && hour < 12) {
+    return "Morning";
+  }
+
+  if (hour >= 12 && hour < 17) {
+    return "Afternoon";
+  }
+
+  if (hour >= 17 && hour < 21) {
+    return "Evening";
+  }
+
+  return "Night";
+}
+
+/* =========================================================
+   GET ALL SCHEDULE LABELS
+========================================================= */
+
+function getScheduleLabels(
+  doseTimes
+) {
+  const schedules = [
+    ...new Set(
+      doseTimes
+        .filter(Boolean)
+        .map((time) =>
+          getSchedule(time)
+        )
+    ),
+  ];
+
+  return schedules;
+}
+
+/* =========================================================
+   GET SCHEDULE TEXT
+========================================================= */
+
+function getScheduleText(
+  doseTimes
+) {
+  const schedules =
+    getScheduleLabels(doseTimes);
+
+  if (!schedules.length) {
+    return "Not set";
+  }
+
+  return schedules.join(" + ");
+}
+
+/* =========================================================
+   GET FREQUENCY FROM DOSE TIMES
+
+   The actual prescription schedule is
+   represented by doseTimes.
+
+   frequency is now only a readable summary.
+========================================================= */
+
+function getFrequencyFromDoseTimes(
+  doseTimes
+) {
+  const count =
+    doseTimes.filter(Boolean).length;
+
+  switch (count) {
+    case 0:
+      return "Not scheduled";
+
+    case 1:
+      return "Once daily";
+
+    case 2:
+      return "Twice daily";
+
+    case 3:
+      return "Three times daily";
+
+    case 4:
+      return "Four times daily";
 
     default:
-      return 1;
+      return `${count} times daily`;
   }
+}
+
+/* =========================================================
+   GET DAILY DOSE COUNT
+========================================================= */
+
+function getDailyDoseCount(
+  medicine
+) {
+  const count =
+    Array.isArray(
+      medicine.doseTimes
+    )
+      ? medicine.doseTimes.filter(
+          Boolean
+        ).length
+      : 0;
+
+  return count;
 }
 
 /* =========================================================
    DAYS BETWEEN DATES
 ========================================================= */
 
-function getDaysBetween(startDate, endDate) {
+function getDaysBetween(
+  startDate,
+  endDate
+) {
   if (!startDate || !endDate) {
     return 0;
   }
@@ -232,7 +442,8 @@ function getDaysBetween(startDate, endDate) {
   }
 
   const difference =
-    end.getTime() - start.getTime();
+    end.getTime() -
+    start.getTime();
 
   return Math.max(
     0,
@@ -267,7 +478,8 @@ function getPrescriptionDaysRemaining(
   }
 
   const difference =
-    end.getTime() - today.getTime();
+    end.getTime() -
+    today.getTime();
 
   return Math.max(
     0,
@@ -276,6 +488,87 @@ function getPrescriptionDaysRemaining(
         (1000 * 60 * 60 * 24)
     )
   );
+}
+
+/* =========================================================
+   PRESCRIPTION ACTIVE CHECK
+========================================================= */
+
+function isPrescriptionActive(
+  medicine
+) {
+  if (medicine.status !== "Active") {
+    return false;
+  }
+
+  const today = getTodayKey();
+
+  if (
+    medicine.prescriptionStartDate &&
+    today <
+      medicine.prescriptionStartDate
+  ) {
+    return false;
+  }
+
+  if (
+    medicine.prescriptionEndDate &&
+    today >
+      medicine.prescriptionEndDate
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/* =========================================================
+   DOSE TAKEN CHECK
+========================================================= */
+
+function isDoseTaken(
+  medicine,
+  time,
+  dateKey = getTodayKey()
+) {
+  return Boolean(
+    medicine.doseTaken?.[
+      dateKey
+    ]?.[time]
+  );
+}
+
+/* =========================================================
+   UPDATE DOSE TAKEN STATE
+========================================================= */
+
+function updateDoseTakenState(
+  medicine,
+  time,
+  value,
+  dateKey = getTodayKey()
+) {
+  const currentDoseTaken =
+    medicine.doseTaken || {};
+
+  const dayState =
+    currentDoseTaken[
+      dateKey
+    ] || {};
+
+  return {
+    ...medicine,
+
+    doseTaken: {
+      ...currentDoseTaken,
+
+      [dateKey]: {
+        ...dayState,
+
+        [time]: value,
+      },
+    },
+  };
 }
 
 /* =========================================================
@@ -342,7 +635,7 @@ function Medicines() {
   };
 
   /* =======================================================
-     OPEN ADD
+     OPEN ADD MODAL
   ======================================================= */
 
   const openAddModal = () => {
@@ -357,7 +650,7 @@ function Medicines() {
   };
 
   /* =======================================================
-     OPEN EDIT
+     OPEN EDIT MODAL
   ======================================================= */
 
   const openEditModal = (
@@ -366,17 +659,14 @@ function Medicines() {
     setEditingId(medicine.id);
 
     setForm({
-      name: medicine.name || "",
+      name:
+        medicine.name || "",
 
       dosage:
         medicine.dosage || "",
 
       form:
         medicine.form || "Tablet",
-
-      frequency:
-        medicine.frequency ||
-        "Once daily",
 
       doseTimes:
         medicine.doseTimes?.length
@@ -417,7 +707,8 @@ function Medicines() {
         medicine.purpose || "",
 
       status:
-        medicine.status || "Active",
+        medicine.status ||
+        "Active",
 
       accentColor:
         medicine.accentColor ||
@@ -509,67 +800,6 @@ function Medicines() {
   };
 
   /* =======================================================
-     FORMAT TIME
-  ======================================================= */
-
-  const formatTime = (time) => {
-    if (!time) {
-      return "";
-    }
-
-    const [hours, minutes] =
-      time.split(":");
-
-    let hour = Number(hours);
-
-    const period =
-      hour >= 12 ? "PM" : "AM";
-
-    hour = hour % 12 || 12;
-
-    return `${hour}:${minutes} ${period}`;
-  };
-
-  /* =======================================================
-     GET SCHEDULE
-  ======================================================= */
-
-  const getSchedule = (
-    time
-  ) => {
-    if (!time) {
-      return "Morning";
-    }
-
-    const hour = Number(
-      time.split(":")[0]
-    );
-
-    if (
-      hour >= 5 &&
-      hour < 12
-    ) {
-      return "Morning";
-    }
-
-    if (
-      hour >= 12 &&
-      hour < 17
-    ) {
-      return "Afternoon";
-    }
-
-    if (
-      hour >= 17 &&
-      hour < 21
-    ) {
-      return "Evening";
-    }
-
-    return "Night";
-  };
-
-  /* =======================================================
      SAVE MEDICINE
   ======================================================= */
 
@@ -595,12 +825,21 @@ function Medicines() {
     }
 
     const validTimes =
-      form.doseTimes.filter(
-        (time) => time
+      [
+        ...new Set(
+          form.doseTimes.filter(
+            Boolean
+          )
+        ),
+      ].sort();
+
+    if (!validTimes.length) {
+      alert(
+        "Please add at least one dose time."
       );
 
-    const firstTime =
-      validTimes[0] || "";
+      return;
+    }
 
     /* -----------------------------------------------
        PRESCRIPTION VALIDATION
@@ -629,6 +868,46 @@ function Medicines() {
       }
     }
 
+    const prescribedQuantity =
+      Number(
+        form.prescribedQuantity
+      ) || 0;
+
+    const stock =
+      Number(form.stock) || 0;
+
+    const lowStockAlert =
+      Number(
+        form.lowStockAlert
+      ) || 3;
+
+    const frequency =
+      getFrequencyFromDoseTimes(
+        validTimes
+      );
+
+    const schedule =
+      getScheduleText(
+        validTimes
+      );
+
+    const firstTime =
+      validTimes[0] || "";
+
+    /*
+      Preserve existing dose history
+      when editing the medicine.
+    */
+
+    const existingMedicine =
+      editingId
+        ? medicines.find(
+            (medicine) =>
+              medicine.id ===
+              editingId
+          )
+        : null;
+
     const medicineData = {
       name:
         form.name.trim(),
@@ -639,14 +918,20 @@ function Medicines() {
       form:
         form.form,
 
-      frequency:
-        form.frequency,
+      /*
+        SOURCE OF TRUTH
+      */
 
       doseTimes:
         validTimes,
 
-      schedule:
-        getSchedule(firstTime),
+      /*
+        Derived display values
+      */
+
+      frequency,
+
+      schedule,
 
       time:
         formatTime(firstTime),
@@ -659,20 +944,13 @@ function Medicines() {
       prescriptionEndDate:
         form.prescriptionEndDate,
 
-      prescribedQuantity:
-        Number(
-          form.prescribedQuantity
-        ) || 0,
+      prescribedQuantity,
 
       /* INVENTORY */
 
-      stock:
-        Number(form.stock) || 0,
+      stock,
 
-      lowStockAlert:
-        Number(
-          form.lowStockAlert
-        ) || 3,
+      lowStockAlert,
 
       purpose:
         form.purpose.trim(),
@@ -690,16 +968,22 @@ function Medicines() {
         form.notes.trim(),
 
       /*
-        Preserve taken state when editing.
+        Preserve dose history.
+      */
+
+      doseTaken:
+        existingMedicine?.doseTaken ||
+        {},
+
+      /*
+        Backwards compatibility only.
       */
 
       taken:
-        editingId
-          ? medicines.find(
-              (medicine) =>
-                medicine.id ===
-                editingId
-            )?.taken || false
+        existingMedicine
+          ? Boolean(
+              existingMedicine.taken
+            )
           : false,
     };
 
@@ -752,7 +1036,7 @@ function Medicines() {
   };
 
   /* =======================================================
-     DELETE
+     DELETE MEDICINE
   ======================================================= */
 
   const deleteMedicine = (
@@ -792,22 +1076,101 @@ function Medicines() {
   };
 
   /* =======================================================
-     TOGGLE TAKEN
+     TOGGLE INDIVIDUAL DOSE
   ======================================================= */
 
-  const toggleTaken = (
-    id
+  const toggleDose = (
+    medicineId,
+    time
   ) => {
+    const dateKey =
+      getTodayKey();
+
+    const medicine =
+      medicines.find(
+        (item) =>
+          item.id ===
+          medicineId
+      );
+
+    if (!medicine) {
+      return;
+    }
+
+    /*
+      Do not allow doses outside
+      the active prescription.
+    */
+
+    if (
+      !isPrescriptionActive(
+        medicine
+      )
+    ) {
+      return;
+    }
+
+    const currentlyTaken =
+      isDoseTaken(
+        medicine,
+        time,
+        dateKey
+      );
+
+    /*
+      Taking a dose:
+        stock - 1
+
+      Undoing a dose:
+        stock + 1
+    */
+
+    if (
+      !currentlyTaken &&
+      Number(medicine.stock) <= 0
+    ) {
+      alert(
+        `No ${medicine.form?.toLowerCase() || "dose"} remaining for ${medicine.name}.`
+      );
+
+      return;
+    }
+
     const updatedMedicines =
       medicines.map(
-        (medicine) =>
-          medicine.id === id
-            ? {
-                ...medicine,
-                taken:
-                  !medicine.taken,
-              }
-            : medicine
+        (item) => {
+          if (
+            item.id !==
+            medicineId
+          ) {
+            return item;
+          }
+
+          const updated =
+            updateDoseTakenState(
+              item,
+              time,
+              !currentlyTaken,
+              dateKey
+            );
+
+          const currentStock =
+            Number(
+              item.stock
+            ) || 0;
+
+          return {
+            ...updated,
+
+            stock:
+              currentlyTaken
+                ? currentStock + 1
+                : Math.max(
+                    0,
+                    currentStock - 1
+                  ),
+          };
+        }
       );
 
     setMedicines(
@@ -837,10 +1200,65 @@ function Medicines() {
       ) || 3;
 
     /*
-      Critical if stock is 3 or below.
+      Prescription not currently active.
     */
 
-    if (stock <= 3) {
+    if (
+      medicine.status ===
+      "Paused"
+    ) {
+      return {
+        type: "paused",
+        label: "Prescription paused",
+      };
+    }
+
+    if (
+      medicine.status ===
+      "Completed"
+    ) {
+      return {
+        type: "completed",
+        label: "Prescription completed",
+      };
+    }
+
+    if (
+      medicine.prescriptionEndDate
+    ) {
+      const daysRemaining =
+        getPrescriptionDaysRemaining(
+          medicine.prescriptionEndDate
+        );
+
+      if (
+        daysRemaining === 0
+      ) {
+        return {
+          type: "completed",
+          label: "Prescription ended",
+        };
+      }
+    }
+
+    /*
+      No stock.
+    */
+
+    if (stock <= 0) {
+      return {
+        type: "critical",
+        label: "No stock remaining",
+      };
+    }
+
+    /*
+      User-defined threshold.
+    */
+
+    if (
+      stock <= lowStock
+    ) {
       return {
         type: "critical",
         label: "Critical stock",
@@ -848,21 +1266,13 @@ function Medicines() {
     }
 
     /*
-      If there is no prescription,
-      fall back to the basic stock threshold.
+      No prescription quantity/date.
     */
 
     if (
       !medicine.prescriptionEndDate ||
       !medicine.prescribedQuantity
     ) {
-      if (stock <= lowStock) {
-        return {
-          type: "attention",
-          label: "Low stock",
-        };
-      }
-
       return {
         type: "good",
         label: "Stock sufficient",
@@ -874,53 +1284,42 @@ function Medicines() {
         medicine.prescriptionEndDate
       );
 
-    /*
-      Prescription has ended.
-    */
-
     if (
-      daysRemaining === 0
+      daysRemaining === null
     ) {
       return {
-        type: "completed",
-        label: "Prescription ended",
+        type: "good",
+        label: "Stock sufficient",
       };
     }
 
     const dailyDose =
       getDailyDoseCount(
-        medicine.frequency
+        medicine
       );
 
-    /*
-      As-needed medicines cannot
-      calculate exact requirement.
-    */
-
-    if (dailyDose === 0) {
+    if (
+      dailyDose <= 0
+    ) {
       return {
-        type:
-          stock <= lowStock
-            ? "attention"
-            : "good",
-
-        label:
-          stock <= lowStock
-            ? "Low stock"
-            : "Stock sufficient",
+        type: "good",
+        label: "Stock sufficient",
       };
     }
+
+    /*
+      Include today in the
+      remaining requirement.
+    */
 
     const expectedRequired =
       Math.ceil(
         dailyDose *
-          daysRemaining
+          Math.max(
+            1,
+            daysRemaining
+          )
       );
-
-    /*
-      Stock is not enough to finish
-      the remaining prescription.
-    */
 
     if (
       stock <
@@ -940,21 +1339,112 @@ function Medicines() {
   };
 
   /* =======================================================
+     TODAY'S DOSE COUNT
+  ======================================================= */
+
+  const getTodayDoseCount =
+    (medicine) => {
+      if (
+        !isPrescriptionActive(
+          medicine
+        )
+      ) {
+        return 0;
+      }
+
+      return getDailyDoseCount(
+        medicine
+      );
+    };
+
+  /* =======================================================
+     TODAY'S TAKEN DOSE COUNT
+  ======================================================= */
+
+  const getTodayTakenDoseCount =
+    (medicine) => {
+      if (
+        !isPrescriptionActive(
+          medicine
+        )
+      ) {
+        return 0;
+      }
+
+      const today =
+        getTodayKey();
+
+      return (
+        medicine.doseTimes?.filter(
+          (time) =>
+            medicine.doseTaken?.[
+              today
+            ]?.[time]
+        ).length || 0
+      );
+    };
+
+  /* =======================================================
+     TODAY'S REMAINING DOSE COUNT
+  ======================================================= */
+
+  const getTodayRemainingDoseCount =
+    (medicine) => {
+      const scheduled =
+        getTodayDoseCount(
+          medicine
+        );
+
+      const taken =
+        getTodayTakenDoseCount(
+          medicine
+        );
+
+      return Math.max(
+        0,
+        scheduled - taken
+      );
+    };
+
+  /* =======================================================
      STATISTICS
   ======================================================= */
 
   const totalMedicines =
     medicines.length;
 
+  const totalScheduledDosesToday =
+    medicines.reduce(
+      (
+        total,
+        medicine
+      ) =>
+        total +
+        getTodayDoseCount(
+          medicine
+        ),
+      0
+    );
+
   const takenToday =
-    medicines.filter(
-      (medicine) =>
-        medicine.taken
-    ).length;
+    medicines.reduce(
+      (
+        total,
+        medicine
+      ) =>
+        total +
+        getTodayTakenDoseCount(
+          medicine
+        ),
+      0
+    );
 
   const remaining =
-    totalMedicines -
-    takenToday;
+    Math.max(
+      0,
+      totalScheduledDosesToday -
+        takenToday
+    );
 
   const criticalCount =
     medicines.filter(
@@ -972,6 +1462,15 @@ function Medicines() {
         ).type ===
         "attention"
     ).length;
+
+  const adherence =
+    totalScheduledDosesToday === 0
+      ? 0
+      : Math.round(
+          (takenToday /
+            totalScheduledDosesToday) *
+            100
+        );
 
   /* =======================================================
      RENDER
@@ -1001,9 +1500,9 @@ function Medicines() {
               </h1>
 
               <p className="text-lg text-slate-400 mt-4">
-                Manage your medications,
-                prescriptions, schedules,
-                inventory, and adherence.
+                Manage your prescriptions,
+                schedules, inventory, and
+                medication adherence.
               </p>
 
             </div>
@@ -1056,6 +1555,8 @@ function Medicines() {
           "
         >
 
+          {/* TOTAL MEDICINES */}
+
           <div
             className="
               rounded-2xl
@@ -1067,16 +1568,25 @@ function Medicines() {
           >
 
             <p className="text-slate-400">
-              Total medicines
+              Active medicines
             </p>
 
             <h2 className="text-5xl font-bold mt-3">
-              {totalMedicines}
+              {
+                medicines.filter(
+                  (medicine) =>
+                    isPrescriptionActive(
+                      medicine
+                    )
+                ).length
+              }
             </h2>
 
           </div>
 
 
+          {/* SCHEDULED DOSES */}
+
           <div
             className="
               rounded-2xl
@@ -1088,15 +1598,50 @@ function Medicines() {
           >
 
             <p className="text-slate-400">
-              Taken today
+              Scheduled doses
+            </p>
+
+            <h2 className="text-5xl font-bold mt-3">
+              {
+                totalScheduledDosesToday
+              }
+            </h2>
+
+            <p className="text-xs text-slate-600 mt-2">
+              Today
+            </p>
+
+          </div>
+
+
+          {/* TAKEN */}
+
+          <div
+            className="
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              p-6
+            "
+          >
+
+            <p className="text-slate-400">
+              Doses taken
             </p>
 
             <h2 className="text-5xl font-bold mt-3 text-emerald-400">
               {takenToday}
             </h2>
 
+            <p className="text-xs text-slate-600 mt-2">
+              Today
+            </p>
+
           </div>
 
+
+          {/* REMAINING */}
 
           <div
             className="
@@ -1109,36 +1654,21 @@ function Medicines() {
           >
 
             <p className="text-slate-400">
-              Remaining
+              Doses remaining
             </p>
 
             <h2 className="text-5xl font-bold mt-3 text-orange-400">
               {remaining}
             </h2>
 
-          </div>
-
-
-          <div
-            className="
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/5
-              p-6
-            "
-          >
-
-            <p className="text-slate-400">
-              Prescription alerts
+            <p className="text-xs text-slate-600 mt-2">
+              Today
             </p>
 
-            <h2 className="text-5xl font-bold mt-3 text-orange-400">
-              {attentionCount}
-            </h2>
-
           </div>
 
+
+          {/* STOCK ALERT */}
 
           <div
             className="
@@ -1151,16 +1681,87 @@ function Medicines() {
           >
 
             <p className="text-slate-400">
-              Critical stock
+              Stock alerts
             </p>
 
             <h2 className="text-5xl font-bold mt-3 text-red-400">
-              {criticalCount}
+              {
+                criticalCount +
+                attentionCount
+              }
             </h2>
 
           </div>
 
         </section>
+
+
+        {/* =================================================
+            ADHERENCE SUMMARY
+        ================================================= */}
+
+        {totalScheduledDosesToday >
+          0 && (
+
+          <section
+            className="
+              rounded-2xl
+              border
+              border-cyan-400/20
+              bg-cyan-400/[0.03]
+              p-6
+              mb-10
+            "
+          >
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+
+              <div>
+
+                <p className="text-sm text-slate-400">
+                  Today's adherence
+                </p>
+
+                <h2 className="text-3xl font-bold mt-1">
+                  {adherence}%
+                </h2>
+
+              </div>
+
+              <div className="flex-1 max-w-2xl">
+
+                <div className="h-3 bg-slate-700/60 rounded-full overflow-hidden">
+
+                  <div
+                    className="
+                      h-full
+                      bg-cyan-400
+                      rounded-full
+                      transition-all
+                      duration-500
+                    "
+                    style={{
+                      width: `${adherence}%`,
+                    }}
+                  />
+
+                </div>
+
+                <p className="text-xs text-slate-500 mt-2">
+                  {takenToday} of{" "}
+                  {
+                    totalScheduledDosesToday
+                  }{" "}
+                  scheduled doses completed
+                </p>
+
+              </div>
+
+            </div>
+
+          </section>
+
+        )}
 
 
         {/* =================================================
@@ -1178,8 +1779,8 @@ function Medicines() {
               </h2>
 
               <p className="text-slate-500 mt-1">
-                Active medications,
-                prescriptions, and inventory
+                Current prescriptions and
+                medication schedules
               </p>
 
             </div>
@@ -1202,16 +1803,21 @@ function Medicines() {
 
               <Pill
                 size={45}
-                className="mx-auto text-slate-600 mb-4"
+                className="
+                  mx-auto
+                  text-slate-600
+                  mb-4
+                "
               />
 
               <h3 className="text-xl font-semibold">
-                No medicines yet
+                No active prescriptions
               </h3>
 
               <p className="text-slate-500 mt-2 mb-6">
-                Add your first medicine
-                to get started.
+                Add a prescription to
+                generate your medication
+                schedule.
               </p>
 
               <button
@@ -1266,6 +1872,12 @@ function Medicines() {
                       medicine.prescribedQuantity
                     ) || 0;
 
+                  /*
+                    Inventory progress is based
+                    on the originally prescribed
+                    quantity.
+                  */
+
                   const prescriptionProgress =
                     prescribedQuantity >
                     0
@@ -1280,9 +1892,28 @@ function Medicines() {
                         )
                       : 0;
 
+                  const schedule =
+                    getScheduleText(
+                      medicine.doseTimes ||
+                        []
+                    );
+
+                  const frequency =
+                    getFrequencyFromDoseTimes(
+                      medicine.doseTimes ||
+                        []
+                    );
+
+                  const active =
+                    isPrescriptionActive(
+                      medicine
+                    );
+
                   return (
                     <div
-                      key={medicine.id}
+                      key={
+                        medicine.id
+                      }
                       className="
                         rounded-2xl
                         border
@@ -1322,14 +1953,20 @@ function Medicines() {
                           <div>
 
                             <h3 className="text-xl font-semibold">
-                              {medicine.name}
+                              {
+                                medicine.name
+                              }
                             </h3>
 
                             <p className="text-sm text-slate-500 mt-1">
-                              {medicine.dosage}
+                              {
+                                medicine.dosage
+                              }
                               {" · "}
-                              {medicine.form ||
-                                "Tablet"}
+                              {
+                                medicine.form ||
+                                "Tablet"
+                              }
                             </p>
 
                           </div>
@@ -1360,10 +1997,12 @@ function Medicines() {
                               hover:text-white
                               transition
                             "
-                            title="Edit medicine"
+                            title="Edit prescription"
                           >
 
-                            <Edit3 size={17} />
+                            <Edit3
+                              size={17}
+                            />
 
                           </button>
 
@@ -1386,10 +2025,12 @@ function Medicines() {
                               text-red-400
                               transition
                             "
-                            title="Delete medicine"
+                            title="Delete prescription"
                           >
 
-                            <Trash2 size={17} />
+                            <Trash2
+                              size={17}
+                            />
 
                           </button>
 
@@ -1398,12 +2039,40 @@ function Medicines() {
                       </div>
 
 
+                      {/* STATUS */}
+
+                      {!active && (
+
+                        <div
+                          className="
+                            mt-5
+                            rounded-xl
+                            border
+                            border-orange-400/20
+                            bg-orange-400/5
+                            px-4
+                            py-3
+                            text-sm
+                            text-orange-400
+                          "
+                        >
+
+                          {
+                            status.label
+                          }
+
+                        </div>
+
+                      )}
+
+
                       {/* DETAILS */}
 
                       <div
                         className="
                           grid
-                          grid-cols-2
+                          grid-cols-1
+                          sm:grid-cols-2
                           gap-4
                           mt-6
                         "
@@ -1423,8 +2092,7 @@ function Medicines() {
                             />
 
                             <span className="text-slate-300">
-                              {medicine.time ||
-                                "Not set"}
+                              {schedule}
                             </span>
 
                           </div>
@@ -1439,9 +2107,167 @@ function Medicines() {
                           </p>
 
                           <p className="text-slate-300 mt-2">
-                            {medicine.frequency ||
-                              "Once daily"}
+                            {frequency}
                           </p>
+
+                        </div>
+
+                      </div>
+
+
+                      {/* INDIVIDUAL DOSE SCHEDULE */}
+
+                      <div
+                        className="
+                          mt-6
+                          rounded-xl
+                          border
+                          border-white/10
+                          bg-black/10
+                          p-4
+                        "
+                      >
+
+                        <div className="flex items-center justify-between mb-4">
+
+                          <div className="flex items-center gap-2">
+
+                            <Clock3
+                              size={17}
+                              className="text-cyan-400"
+                            />
+
+                            <p className="text-sm font-medium">
+                              Today's doses
+                            </p>
+
+                          </div>
+
+                          <span className="text-xs text-slate-500">
+                            {
+                              getTodayTakenDoseCount(
+                                medicine
+                              )
+                            }
+                            /
+                            {
+                              getTodayDoseCount(
+                                medicine
+                              )
+                          }{" "}
+                            taken
+                          </span>
+
+                        </div>
+
+
+                        <div className="space-y-2">
+
+                          {(
+                            medicine.doseTimes ||
+                            []
+                          ).map(
+                            (time) => {
+
+                              const taken =
+                                isDoseTaken(
+                                  medicine,
+                                  time
+                                );
+
+                              return (
+                                <button
+                                  key={time}
+                                  type="button"
+                                  disabled={
+                                    !active
+                                  }
+                                  onClick={() =>
+                                    toggleDose(
+                                      medicine.id,
+                                      time
+                                    )
+                                  }
+                                  className={`
+                                    w-full
+                                    flex
+                                    items-center
+                                    justify-between
+                                    gap-3
+                                    rounded-lg
+                                    px-3
+                                    py-3
+                                    transition
+                                    ${
+                                      taken
+                                        ? "bg-emerald-400/10 border border-emerald-400/20"
+                                        : "bg-white/5 border border-white/5 hover:bg-white/10"
+                                    }
+                                    ${
+                                      !active
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : "cursor-pointer"
+                                    }
+                                  `}
+                                >
+
+                                  <div className="flex items-center gap-3">
+
+                                    {taken ? (
+                                      <CheckCircle2
+                                        size={
+                                          17
+                                        }
+                                        className="text-emerald-400"
+                                      />
+                                    ) : (
+                                      <Clock3
+                                        size={
+                                          17
+                                        }
+                                        className="text-orange-400"
+                                      />
+                                    )}
+
+                                    <div className="text-left">
+
+                                      <p className="text-sm text-slate-200">
+                                        {
+                                          formatTime(
+                                            time
+                                          )
+                                        }
+                                      </p>
+
+                                      <p className="text-xs text-slate-500">
+                                        {
+                                          getSchedule(
+                                            time
+                                          )
+                                        }
+                                      </p>
+
+                                    </div>
+
+                                  </div>
+
+
+                                  <span
+                                    className={
+                                      taken
+                                        ? "text-xs text-emerald-400"
+                                        : "text-xs text-orange-400"
+                                    }
+                                  >
+                                    {taken
+                                      ? "Taken"
+                                      : "Upcoming"}
+                                  </span>
+
+                                </button>
+                              );
+                            }
+                          )}
 
                         </div>
 
@@ -1490,8 +2316,10 @@ function Medicines() {
                             </p>
 
                             <p className="text-sm text-slate-300 mt-1">
-                              {medicine.prescriptionStartDate ||
-                                "Not set"}
+                              {
+                                medicine.prescriptionStartDate ||
+                                "Not set"
+                              }
                             </p>
 
                           </div>
@@ -1504,8 +2332,10 @@ function Medicines() {
                             </p>
 
                             <p className="text-sm text-slate-300 mt-1">
-                              {medicine.prescriptionEndDate ||
-                                "Not set"}
+                              {
+                                medicine.prescriptionEndDate ||
+                                "Not set"
+                              }
                             </p>
 
                           </div>
@@ -1519,7 +2349,12 @@ function Medicines() {
 
                             <p className="text-sm text-slate-300 mt-1">
                               {prescribedQuantity
-                                ? `${prescribedQuantity} ${medicine.form === "Liquid" ? "units" : "doses"}`
+                                ? `${prescribedQuantity} ${
+                                    medicine.form ===
+                                    "Liquid"
+                                      ? "units"
+                                      : "doses"
+                                  }`
                                 : "Not set"}
                             </p>
 
@@ -1580,6 +2415,9 @@ function Medicines() {
                                   : status.type ===
                                     "completed"
                                   ? "text-slate-400"
+                                  : status.type ===
+                                    "paused"
+                                  ? "text-slate-400"
                                   : "text-emerald-400"
                               }
                             `}
@@ -1628,8 +2466,13 @@ function Medicines() {
                                 size={15}
                               />
 
-                              Critical stock —
-                              only {stock} remaining
+                              {
+                                status.label
+                              }
+
+                              {stock >
+                                0 &&
+                                ` — only ${stock} remaining`}
 
                             </div>
 
@@ -1645,7 +2488,9 @@ function Medicines() {
                                 size={15}
                               />
 
-                              {status.label}
+                              {
+                                status.label
+                              }
 
                             </div>
 
@@ -1661,7 +2506,9 @@ function Medicines() {
                                 size={15}
                               />
 
-                              {status.label}
+                              {
+                                status.label
+                              }
 
                             </div>
 
@@ -1683,6 +2530,22 @@ function Medicines() {
 
                           )}
 
+
+                          {status.type ===
+                            "paused" && (
+
+                            <div className="flex items-center gap-2 text-slate-400 text-sm">
+
+                              <Clock3
+                                size={15}
+                              />
+
+                              Prescription paused
+
+                            </div>
+
+                          )}
+
                         </div>
 
                       </div>
@@ -1697,63 +2560,40 @@ function Medicines() {
                           border-t
                           border-white/10
                           flex
-                          items-center
-                          justify-between
+                          flex-col
+                          sm:flex-row
+                          sm:items-center
+                          sm:justify-between
+                          gap-3
                         "
                       >
 
-                        <span
-                          className={
-                            medicine.taken
-                              ? "flex items-center gap-2 text-emerald-400 text-sm"
-                              : "flex items-center gap-2 text-orange-400 text-sm"
-                          }
-                        >
+                        <span className="text-sm text-slate-400">
 
-                          {medicine.taken ? (
-                            <>
-                              <CheckCircle2
-                                size={17}
-                              />
-
-                              Taken today
-                            </>
-                          ) : (
-                            <>
-                              <Clock3
-                                size={17}
-                              />
-
-                              Upcoming
-                            </>
-                          )}
+                          {
+                            getTodayRemainingDoseCount(
+                              medicine
+                            )
+                          }{" "}
+                          dose
+                          {
+                            getTodayRemainingDoseCount(
+                              medicine
+                            ) === 1
+                              ? ""
+                              : "s"
+                          }{" "}
+                          remaining today
 
                         </span>
 
 
-                        <button
-                          onClick={() =>
-                            toggleTaken(
-                              medicine.id
-                            )
-                          }
-                          className="
-                            px-4
-                            py-2
-                            rounded-full
-                            bg-white/5
-                            hover:bg-white/10
-                            text-sm
-                            text-slate-300
-                            transition
-                          "
-                        >
+                        <span className="text-xs text-slate-600">
 
-                          {medicine.taken
-                            ? "Mark upcoming"
-                            : "Mark as taken"}
+                          Tap a dose above to
+                          mark it taken
 
-                        </button>
+                        </span>
 
                       </div>
 
@@ -1767,6 +2607,24 @@ function Medicines() {
           )}
 
         </section>
+
+
+        {/* =================================================
+            LIVE SYNC
+        ================================================= */}
+
+        {medicines.length > 0 && (
+
+          <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-600">
+
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+
+            Medication state automatically
+            synchronized
+
+          </div>
+
+        )}
 
       </main>
 
@@ -1835,13 +2693,13 @@ function Medicines() {
 
                 <h2 className="text-2xl font-semibold">
                   {editingId
-                    ? "Edit Medicine"
-                    : "Add Medicine"}
+                    ? "Edit Prescription"
+                    : "Add Prescription"}
                 </h2>
 
                 <p className="text-sm text-slate-500 mt-1">
-                  Prescription and inventory
-                  information
+                  Define the current medication
+                  prescription.
                 </p>
 
               </div>
@@ -1899,7 +2757,7 @@ function Medicines() {
                         event.target.value
                       )
                     }
-                    placeholder="e.g. Metformin"
+                    placeholder="e.g. Paracetamol"
                     className="
                       w-full
                       h-12
@@ -1954,130 +2812,63 @@ function Medicines() {
               </div>
 
 
-              {/* FORM + FREQUENCY */}
+              {/* FORM */}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+              <div className="mt-5">
 
-                <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Form
+                </label>
 
-                  <label className="block text-sm text-slate-400 mb-2">
-                    Form
-                  </label>
+                <select
+                  value={
+                    form.form
+                  }
+                  onChange={(event) =>
+                    updateForm(
+                      "form",
+                      event.target.value
+                    )
+                  }
+                  className="
+                    w-full
+                    h-12
+                    px-4
+                    rounded-xl
+                    border
+                    border-white/10
+                    bg-[#111F32]
+                    text-white
+                    outline-none
+                    focus:border-cyan-400/50
+                  "
+                >
 
-                  <select
-                    value={
-                      form.form
-                    }
-                    onChange={(event) =>
-                      updateForm(
-                        "form",
-                        event.target.value
-                      )
-                    }
-                    className="
-                      w-full
-                      h-12
-                      px-4
-                      rounded-xl
-                      border
-                      border-white/10
-                      bg-[#111F32]
-                      text-white
-                      outline-none
-                      focus:border-cyan-400/50
-                    "
-                  >
+                  <option>
+                    Tablet
+                  </option>
 
-                    <option>
-                      Tablet
-                    </option>
+                  <option>
+                    Capsule
+                  </option>
 
-                    <option>
-                      Capsule
-                    </option>
+                  <option>
+                    Liquid
+                  </option>
 
-                    <option>
-                      Liquid
-                    </option>
+                  <option>
+                    Injection
+                  </option>
 
-                    <option>
-                      Injection
-                    </option>
+                  <option>
+                    Powder
+                  </option>
 
-                    <option>
-                      Powder
-                    </option>
+                  <option>
+                    Other
+                  </option>
 
-                    <option>
-                      Other
-                    </option>
-
-                  </select>
-
-                </div>
-
-
-                <div>
-
-                  <label className="block text-sm text-slate-400 mb-2">
-                    Frequency
-                  </label>
-
-                  <select
-                    value={
-                      form.frequency
-                    }
-                    onChange={(event) =>
-                      updateForm(
-                        "frequency",
-                        event.target.value
-                      )
-                    }
-                    className="
-                      w-full
-                      h-12
-                      px-4
-                      rounded-xl
-                      border
-                      border-white/10
-                      bg-[#111F32]
-                      text-white
-                      outline-none
-                      focus:border-cyan-400/50
-                    "
-                  >
-
-                    <option>
-                      Once daily
-                    </option>
-
-                    <option>
-                      Twice daily
-                    </option>
-
-                    <option>
-                      Three times daily
-                    </option>
-
-                    <option>
-                      Four times daily
-                    </option>
-
-                    <option>
-                      Every other day
-                    </option>
-
-                    <option>
-                      Weekly
-                    </option>
-
-                    <option>
-                      As needed
-                    </option>
-
-                  </select>
-
-                </div>
+                </select>
 
               </div>
 
@@ -2089,6 +2880,11 @@ function Medicines() {
                 <label className="block text-sm text-slate-400 mb-2">
                   Dose times
                 </label>
+
+                <p className="text-xs text-slate-600 mb-3">
+                  These times define the actual
+                  prescription schedule.
+                </p>
 
                 <div className="space-y-3">
 
@@ -2125,6 +2921,16 @@ function Medicines() {
                             focus:border-cyan-400/50
                           "
                         />
+
+                        <span className="hidden sm:block min-w-[85px] text-xs text-slate-500">
+                          {
+                            time
+                              ? getSchedule(
+                                  time
+                                )
+                              : "Schedule"
+                          }
+                        </span>
 
                         {form
                           .doseTimes
@@ -2186,15 +2992,57 @@ function Medicines() {
 
                   <Plus size={17} />
 
-                  Add time slot
+                  Add dose time
 
                 </button>
+
+
+                {/* LIVE SCHEDULE PREVIEW */}
+
+                {form.doseTimes.some(
+                  Boolean
+                ) && (
+
+                  <div
+                    className="
+                      mt-4
+                      rounded-xl
+                      border
+                      border-cyan-400/10
+                      bg-cyan-400/[0.03]
+                      p-4
+                    "
+                  >
+
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      Generated schedule
+                    </p>
+
+                    <p className="text-sm text-cyan-400 mt-2">
+                      {
+                        getScheduleText(
+                          form.doseTimes
+                        )
+                      }
+                    </p>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      {
+                        getFrequencyFromDoseTimes(
+                          form.doseTimes
+                        )
+                      }
+                    </p>
+
+                  </div>
+
+                )}
 
               </div>
 
 
               {/* =================================================
-                  PRESCRIPTION SECTION
+                  PRESCRIPTION
               ================================================= */}
 
               <div
@@ -2232,13 +3080,12 @@ function Medicines() {
                   <div>
 
                     <h3 className="font-semibold">
-                      Prescription
+                      Prescription period
                     </h3>
 
                     <p className="text-xs text-slate-500 mt-1">
-                      Used to calculate
-                      expected medication
-                      requirements.
+                      Defines when this medication
+                      should be active.
                     </p>
 
                   </div>
@@ -2320,7 +3167,7 @@ function Medicines() {
                 </div>
 
 
-                {/* PRESCRIBED QUANTITY */}
+                {/* QUANTITY */}
 
                 <div className="mt-5">
 
@@ -2409,8 +3256,8 @@ function Medicines() {
                     </h3>
 
                     <p className="text-xs text-slate-500 mt-1">
-                      How many doses you currently
-                      have available.
+                      Current available medication
+                      quantity.
                     </p>
 
                   </div>
@@ -2491,11 +3338,6 @@ function Medicines() {
                       "
                     />
 
-                    <p className="text-xs text-slate-600 mt-2">
-                      Default critical threshold
-                      is 3 doses.
-                    </p>
-
                   </div>
 
                 </div>
@@ -2522,7 +3364,7 @@ function Medicines() {
                       event.target.value
                     )
                   }
-                  placeholder="e.g. Blood pressure"
+                  placeholder="e.g. Fever / pain relief"
                   className="
                     w-full
                     h-12
@@ -2658,7 +3500,7 @@ function Medicines() {
               <div className="mt-5">
 
                 <label className="block text-sm text-slate-400 mb-2">
-                  Notes (optional)
+                  Notes / instructions
                 </label>
 
                 <textarea
@@ -2671,7 +3513,7 @@ function Medicines() {
                       event.target.value
                     )
                   }
-                  placeholder="Special instructions..."
+                  placeholder="e.g. Take after breakfast"
                   rows={3}
                   className="
                     w-full
@@ -2747,7 +3589,7 @@ function Medicines() {
 
                   {editingId
                     ? "Save changes"
-                    : "Add medicine"}
+                    : "Add prescription"}
 
                 </button>
 
